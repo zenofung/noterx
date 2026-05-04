@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
@@ -7,6 +7,7 @@ import { pageTransition } from "./utils/motion";
 import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AnnouncementDialog from "./components/AnnouncementDialog";
+import { trackVisit } from "./utils/api";
 import "./index.css";
 
 /* ── Lazy-loaded pages ── */
@@ -137,6 +138,16 @@ function AnimatedRoutes() {
   );
 }
 
+function VisitTracker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    trackVisit(window.location.pathname);
+  }, [location.pathname]);
+
+  return null;
+}
+
 /**
  * NoteRx Root Component
  */
@@ -146,6 +157,7 @@ function App() {
       <CssBaseline />
       <ErrorBoundary>
         <BrowserRouter basename="/app">
+          <VisitTracker />
           <AnimatedRoutes />
           <ToastContainer />
           <AnnouncementDialog />
