@@ -6,6 +6,13 @@
 <title>隐私政策 — 薯医 NoteRx</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var payload=JSON.stringify({path:location.pathname,referrer:document.referrer});
+  if(navigator.sendBeacon){navigator.sendBeacon('/api/visit',new Blob([payload],{type:'application/json'}));return;}
+  fetch('/api/visit',{method:'POST',headers:{'Content-Type':'application/json'},body:payload,keepalive:true}).catch(function(){});
+})();
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--red:#ff2442;--red-light:#fff0f2;--ink:#262626;--slate:#666;--muted:#999;--border:#f0f0f0;--bg:#fafafa}
@@ -57,7 +64,7 @@ li{margin-bottom:0.3rem}
 <p>本平台调用小米 MiMo API 进行AI分析。在诊断过程中，您的笔记内容会被传输至 MiMo API 进行处理，相关数据受小米隐私政策约束。除此之外，我们不会将您的数据分享给其他第三方。</p>
 
 <h2>Cookie</h2>
-<p>本平台不使用 Cookie。我们不追踪您的浏览行为，也不使用任何第三方追踪工具。</p>
+<p>本平台不使用 Cookie。我们仅通过服务端记录匿名访问统计（如访问路径、访问时间、IP 与浏览器信息生成的不可逆哈希），用于计算 PV/UV 和排查服务质量问题，不记录点击轨迹、输入内容、截图或诊断报告。</p>
 
 <h2>未成年人</h2>
 <p>薯医 NoteRx 由未成年人团队（PageOne）开发，我们欢迎所有年龄段的用户使用本平台。本平台不要求注册账号，不收集个人身份信息。</p>

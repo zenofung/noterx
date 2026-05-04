@@ -17,6 +17,25 @@ const api = axios.create({
   timeout: 120_000,
 });
 
+export function trackVisit(path: string = window.location.pathname): void {
+  const payload = JSON.stringify({
+    path,
+    referrer: document.referrer,
+  });
+
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon("/api/visit", new Blob([payload], { type: "application/json" }));
+    return;
+  }
+
+  fetch("/api/visit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: payload,
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 /**
  * 探测本机后端是否经 Vite 代理可达（与快识/诊断是否「网络问题」无关，只测到 API 进程）。
  */

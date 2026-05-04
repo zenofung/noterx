@@ -6,6 +6,13 @@
 <title>服务条款 — 薯医 NoteRx</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var payload=JSON.stringify({path:location.pathname,referrer:document.referrer});
+  if(navigator.sendBeacon){navigator.sendBeacon('/api/visit',new Blob([payload],{type:'application/json'}));return;}
+  fetch('/api/visit',{method:'POST',headers:{'Content-Type':'application/json'},body:payload,keepalive:true}).catch(function(){});
+})();
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--red:#ff2442;--red-light:#fff0f2;--ink:#262626;--slate:#666;--muted:#999;--border:#f0f0f0;--bg:#fafafa}
