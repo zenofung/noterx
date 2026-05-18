@@ -54,6 +54,19 @@ def _ensure_history_table():
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_log(created_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_ip ON usage_log(ip)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS visit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_hash TEXT NOT NULL,
+            user_agent_hash TEXT DEFAULT '',
+            path TEXT NOT NULL,
+            referrer TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_visit_created ON visit_log(created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_visit_visitor ON visit_log(visitor_hash)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_visit_path ON visit_log(path)")
     conn.commit()
     conn.close()
     local_memory.ensure_memory_md()

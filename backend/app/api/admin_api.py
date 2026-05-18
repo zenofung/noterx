@@ -87,6 +87,41 @@ def _get_stats() -> dict:
             stats["unique_ips"] = 0
             stats["recent_usage"] = []
 
+        try:
+            cur.execute("SELECT COUNT(*), COUNT(DISTINCT visitor_hash) FROM visit_log")
+            row = cur.fetchone()
+            stats["total_pv"] = row[0]
+            stats["total_uv"] = row[1]
+
+            cur.execute("""
+                SELECT COUNT(*), COUNT(DISTINCT visitor_hash)
+                FROM visit_log WHERE date(created_at)=date('now')
+            """)
+            row = cur.fetchone()
+            stats["today_pv"] = row[0]
+            stats["today_uv"] = row[1]
+
+            cur.execute("""
+                SELECT path, COUNT(*) as c
+                FROM visit_log
+                GROUP BY path ORDER BY c DESC LIMIT 20
+            """)
+            stats["visits_by_path"] = {r[0]: r[1] for r in cur.fetchall()}
+
+            cur.execute("""
+                SELECT strftime('%H', created_at) as hour, COUNT(*) as c
+                FROM visit_log WHERE created_at > datetime('now', '-24 hours')
+                GROUP BY hour ORDER BY hour
+            """)
+            stats["visit_hourly_24h"] = {r[0]: r[1] for r in cur.fetchall()}
+        except Exception:
+            stats["total_pv"] = 0
+            stats["total_uv"] = 0
+            stats["today_pv"] = 0
+            stats["today_uv"] = 0
+            stats["visits_by_path"] = {}
+            stats["visit_hourly_24h"] = {}
+
         # Engagement
         cur.execute("""
             SELECT category, metric_name, metric_value FROM baseline_stats
@@ -170,22 +205,34 @@ async function doLogin(){
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function showDash(d){
   const hrs=d.hourly_24h||{};const maxH=Math.max(...Object.values(hrs),1);
+  const visitHrs=d.visit_hourly_24h||{};const maxVisitH=Math.max(...Object.values(visitHrs),1);
   const topIps=d.top_ips||[];const maxIp=topIps[0]?.count||1;
   const usage=d.recent_usage||[];
   const cats=Object.entries(d.usage_by_category||{});const maxCat=Math.max(...cats.map(c=>c[1]),1);
+  const paths=Object.entries(d.visits_by_path||{});const maxPath=Math.max(...paths.map(c=>c[1]),1);
   app.innerHTML=`<div class="d">
   <h1>薯医 Admin</h1><div class="sub">${d.timestamp} · uptime ${Math.round(d.uptime_seconds/60)}min</div>
   <div class="g">
-    <div class="c"><div class="l">今日诊断</div><div class="v">${d.today_requests||0}</div></div>
-    <div class="c"><div class="l">今日 UV</div><div class="v b">${d.today_ips||0}</div></div>
-    <div class="c"><div class="l">总诊断</div><div class="v g2">${d.total_requests||0}</div></div>
-    <div class="c"><div class="l">总 UV</div><div class="v o">${d.unique_ips||0}</div></div>
+    <div class="c"><div class="l">今日访问 UV</div><div class="v b">${d.today_uv||0}</div></div>
+    <div class="c"><div class="l">今日访问 PV</div><div class="v">${d.today_pv||0}</div></div>
+    <div class="c"><div class="l">总访问 UV</div><div class="v o">${d.total_uv||0}</div></div>
+    <div class="c"><div class="l">总访问 PV</div><div class="v g2">${d.total_pv||0}</div></div>
+    <div class="c"><div class="l">今日诊断</div><div class="v sm">${d.today_requests||0}</div></div>
+    <div class="c"><div class="l">诊断 IP</div><div class="v sm">${d.today_ips||0}</div></div>
+    <div class="c"><div class="l">总诊断</div><div class="v sm">${d.total_requests||0}</div></div>
     <div class="c"><div class="l">总 Token</div><div class="v sm">${(d.total_tokens||0).toLocaleString()}</div></div>
     <div class="c"><div class="l">平均耗时</div><div class="v sm">${d.avg_duration_sec||0}s</div></div>
     <div class="c"><div class="l">训练笔记</div><div class="v sm">${d.total_notes||0}</div></div>
     <div class="c"><div class="l">内存</div><div class="v sm">${d.system?.memory_used_mb||'?'}/${d.system?.memory_total_mb||'?'}</div></div>
   </div>
-  <div class="s">24h 请求分布</div>
+  <div class="s">24h 访问分布</div>
+  <div style="display:flex;gap:3px;align-items:end;height:60px;margin-bottom:16px">
+    ${Array.from({length:24},(_,i)=>{const h=String(i).padStart(2,'0');const v=visitHrs[h]||0;
+    return `<div title="${h}:00 → ${v}次" style="flex:1;background:${v?'#3b82f6':'#f0f0f0'};height:${Math.max(v/maxVisitH*100,2)}%;border-radius:2px;cursor:pointer"></div>`;}).join('')}
+  </div>
+  <div class="s">访问路径分布</div>
+  ${paths.map(([p,n])=>`<div class="bar"><div class="n" title="${esc(p)}">${esc(p).slice(0,18)}</div><div class="t"><div class="f" style="width:${n/maxPath*100}%;background:#3b82f6"></div></div><div class="num">${n}</div></div>`).join('')}
+  <div class="s">24h 诊断请求分布</div>
   <div style="display:flex;gap:3px;align-items:end;height:60px;margin-bottom:16px">
     ${Array.from({length:24},(_,i)=>{const h=String(i).padStart(2,'0');const v=hrs[h]||0;
     return `<div title="${h}:00 → ${v}次" style="flex:1;background:${v?'#ff2442':'#f0f0f0'};height:${Math.max(v/maxH*100,2)}%;border-radius:2px;cursor:pointer"></div>`;}).join('')}
