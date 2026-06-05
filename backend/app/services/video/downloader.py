@@ -1,11 +1,13 @@
 from __future__ import annotations
 import asyncio
+import functools
 import json
 import os
 import re
+import time
 
 import httpx
-from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 
 from app.config_video import settings
 from app.models.schemas_video import VideoMeta
@@ -26,7 +28,7 @@ def _load_douyin_cookie_header() -> str:
         app_dir = os.path.dirname(os.path.dirname(current_dir))  # backend/app
         backend_root = os.path.dirname(app_dir)  # backend/
         repo_root = os.path.dirname(backend_root)  # repo root
-        
+
         candidates.append(os.path.join(backend_root, raw))
         candidates.append(os.path.join(repo_root, raw))
         candidates.append(os.path.join(app_dir, raw))
@@ -42,10 +44,9 @@ def _load_douyin_cookie_header() -> str:
     if "=" in raw:
         print(f"[Cookie Loader] Treating env value directly as raw Cookie header (length: {len(raw)})")
         return raw
-    
+
     print(f"[Cookie Loader] WARNING: Could not find cookies file in candidates: {candidates}")
     return ""
-
 
 
 def _parse_cookie_header(cookie_header: str) -> list[dict]:
@@ -82,7 +83,7 @@ async def download_video(url: str, output_dir: str) -> VideoMeta:
         with open(detail_path, "r", encoding="utf-8") as f:
             detail = json.load(f)
     else:
-        detail = await _fetch_detail_playwright(url)
+        detail = await _fetch_detail_in_thread(url)
         if detail:
             with open(detail_path, "w", encoding="utf-8") as f:
                 json.dump(detail, f, ensure_ascii=False)
@@ -108,71 +109,92 @@ async def download_video(url: str, output_dir: str) -> VideoMeta:
     return meta
 
 
-async def _fetch_detail_playwright(url: str) -> dict | None:
-    """Use Playwright to open Douyin page and intercept the detail API response."""
+async def _fetch_detail_in_thread(url: str) -> dict | None:
+    """
+    Run Playwright synchronously in a thread pool executor.
+    This avoids the Windows asyncio SelectorEventLoop limitation where
+    asyncio.create_subprocess_exec is not supported in spawned worker processes.
+    """
+    # First resolve short URL to get aweme_id (this is pure HTTP, fine in async)
     aweme_id = _extract_aweme_id(url)
     if not aweme_id:
         aweme_id = await _resolve_short_url(url)
     if not aweme_id:
         raise RuntimeError(f"无法从链接提取视频ID: {url}")
 
-    # Ensure URL is in full format
+    # Ensure full URL
     if "douyin.com/video/" not in url:
         url = f"https://www.douyin.com/video/{aweme_id}"
 
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        functools.partial(_fetch_detail_sync, url, aweme_id),
+    )
+
+
+def _fetch_detail_sync(url: str, aweme_id: str) -> dict | None:
+    """
+    Synchronous Playwright implementation - safe to run in a thread pool.
+    Uses sync_playwright which manages its own event loop internally.
+    """
+    cookie_header = _load_douyin_cookie_header()
     detail_json = None
     filter_reason = None
-    cookie_header = _load_douyin_cookie_header()
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context_kwargs = {
-            "user_agent": (
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/131.0.0.0 Safari/537.36"
             ),
-            "viewport": {"width": 1440, "height": 900},
-            "locale": "zh-CN",
-        }
-        context = await browser.new_context(**context_kwargs)
+            viewport={"width": 1440, "height": 900},
+            locale="zh-CN",
+        )
         if cookie_header:
-            await context.add_cookies(_parse_cookie_header(cookie_header))
-        page = await context.new_page()
+            context.add_cookies(_parse_cookie_header(cookie_header))
 
-        response_future = asyncio.get_running_loop().create_future()
+        page = context.new_page()
 
-        async def handle_response(response):
+        def handle_response(response):
             nonlocal detail_json, filter_reason
-            if response_future.done():
+            if detail_json:
                 return
             if "aweme/v1/web/aweme/detail" not in response.url:
                 return
             try:
-                body = await response.json()
+                body = response.json()
             except Exception:
                 return
             if body.get("aweme_detail"):
                 detail_json = body
-                if not response_future.done():
-                    response_future.set_result(body)
                 return
-            filter_detail = body.get("filter_detail") or {}
-            if filter_detail.get("filter_reason"):
-                filter_reason = filter_detail["filter_reason"]
+            fd = body.get("filter_detail") or {}
+            if fd.get("filter_reason"):
+                filter_reason = fd["filter_reason"]
 
         page.on("response", handle_response)
 
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            try:
-                await asyncio.wait_for(asyncio.shield(response_future), timeout=30)
-            except asyncio.TimeoutError:
-                detail_json = detail_json or await _extract_from_ssr(page, aweme_id)
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+
+            # Wait up to 30s for the API response to be intercepted
+            deadline = time.time() + 30
+            while time.time() < deadline:
+                if detail_json:
+                    break
+                page.wait_for_timeout(500)
+
+            # Fallback: try SSR data
+            if not detail_json:
+                detail_json = _extract_from_ssr_sync(page, aweme_id)
+
         except Exception as exc:
             raise RuntimeError(_format_exception(exc)) from exc
         finally:
-            await browser.close()
+            browser.close()
 
     if not detail_json and filter_reason:
         raise RuntimeError(
@@ -182,10 +204,10 @@ async def _fetch_detail_playwright(url: str) -> dict | None:
     return detail_json
 
 
-async def _extract_from_ssr(page, aweme_id: str) -> dict | None:
-    """Try to extract video detail from page's SSR RENDER_DATA."""
+def _extract_from_ssr_sync(page, aweme_id: str) -> dict | None:
+    """Try to extract video detail from page's SSR RENDER_DATA (sync version)."""
     try:
-        content = await page.evaluate("""() => {
+        content = page.evaluate("""() => {
             const el = document.querySelector('script[id="RENDER_DATA"]');
             if (!el) return null;
             return decodeURIComponent(el.textContent);
@@ -193,7 +215,6 @@ async def _extract_from_ssr(page, aweme_id: str) -> dict | None:
         if not content:
             return None
         data = json.loads(content)
-        # Search for video detail in the data tree
         return _find_aweme_detail(data, aweme_id)
     except Exception:
         return None
@@ -244,7 +265,6 @@ async def _resolve_short_url(url: str) -> str | None:
         return None
 
 
-
 def _parse_meta(aweme: dict) -> VideoMeta:
     stats = aweme.get("statistics", {})
     video = aweme.get("video", {})
@@ -261,6 +281,7 @@ def _parse_meta(aweme: dict) -> VideoMeta:
         shares=stats.get("share_count"),
         duration=duration,
         thumbnail_url=video.get("cover", {}).get("url_list", [None])[0],
+        publish_time=aweme.get("create_time"),  # Unix timestamp
     )
 
 

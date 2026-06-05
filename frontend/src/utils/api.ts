@@ -480,6 +480,7 @@ export interface VideoMeta {
   shares: number | null;
   duration: number;
   thumbnail_url: string | null;
+  publish_time: number | null;  // Unix timestamp
 }
 
 export interface TranscriptWord {
@@ -522,7 +523,13 @@ export interface SegmentAnalysis {
   ai_prompts: AIPrompts;
 }
 
+export interface ViralDimension {
+  score: number;
+  analysis: string;
+}
+
 export interface ViralAnalysis {
+  // 原有字段
   hook_score: number;
   hook_analysis: string;
   pacing_analysis: string;
@@ -531,6 +538,35 @@ export interface ViralAnalysis {
   target_audience: string;
   content_formula: string;
   recreation_blueprint: string;
+
+  // 综合评分
+  viral_score: number;
+  viral_level: string;          // 低 / 中 / 高
+  score_disclaimer: string;
+
+  // 数据洞察
+  data_insight: string;
+
+  // 行动建议
+  action_suggestion: string;
+  action_reason: string;
+
+  // 六维分析
+  dim_hook: ViralDimension | null;
+  dim_pacing: ViralDimension | null;
+  dim_emotion: ViralDimension | null;
+  dim_comment_bait: ViralDimension | null;
+  dim_share_bait: ViralDimension | null;
+  dim_cover_title: ViralDimension | null;
+
+  // 优化建议套餐
+  new_title: string;
+  opening_3s: string;
+  full_script: string;
+  comment_guide: string;
+
+  // 服务声明
+  service_notice: string;
 }
 
 export interface FullAnalysisResult {

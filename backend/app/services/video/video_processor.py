@@ -1,23 +1,35 @@
+from __future__ import annotations
 import asyncio
+import functools
 import json
 import os
 import re
+import subprocess
 from glob import glob
 
 from app.utils.ffmpeg_helper import resolve_binary_path
 from app.config_video import settings
 
 
-async def _run_cmd(cmd: list[str]) -> tuple[bytes, bytes]:
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+def _run_cmd_sync(cmd: list[str]) -> tuple[bytes, bytes]:
+    """Run a subprocess synchronously (safe in thread pool on Windows)."""
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
-    stdout, stderr = await process.communicate()
-    if process.returncode != 0:
-        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{stderr.decode()}")
-    return stdout, stderr
+    if result.returncode != 0:
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{result.stderr.decode(errors='replace')}")
+    return result.stdout, result.stderr
+
+
+async def _run_cmd(cmd: list[str]) -> tuple[bytes, bytes]:
+    """Async wrapper: runs ffmpeg/ffprobe in a thread pool to avoid Windows event loop issues."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        functools.partial(_run_cmd_sync, cmd),
+    )
 
 
 async def get_video_duration(video_path: str) -> float:
@@ -47,7 +59,7 @@ async def extract_frames(video_path: str, frames_dir: str) -> list[dict]:
     os.makedirs(frames_dir, exist_ok=True)
 
     duration = await get_video_duration(video_path)
-    
+
     interval = float(getattr(settings, "VIDEO_FRAME_INTERVAL_SECONDS", 3.0))
     scene_detect = bool(getattr(settings, "VIDEO_SCENE_DETECT_ENABLED", True))
 
@@ -69,7 +81,7 @@ async def extract_frames(video_path: str, frames_dir: str) -> list[dict]:
         os.rename(f, new_name)
         frames.append({"path": new_name, "timestamp": ts})
 
-    # Optional Scene change detection
+    # Optional scene change detection
     if scene_detect:
         scene_cmd = [
             resolve_binary_path("ffmpeg"), "-y", "-i", video_path,
@@ -77,16 +89,21 @@ async def extract_frames(video_path: str, frames_dir: str) -> list[dict]:
             "-vsync", "vfn", "-q:v", "2",
             os.path.join(frames_dir, "scene_%03d.jpg"),
         ]
-        process = await asyncio.create_subprocess_exec(
-            *scene_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        loop = asyncio.get_event_loop()
+        scene_result = await loop.run_in_executor(
+            None,
+            functools.partial(
+                subprocess.run,
+                scene_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            ),
         )
-        _, stderr_data = await process.communicate()
+        stderr_data = scene_result.stderr
 
         # Parse timestamps from showinfo
         scene_times = []
-        for line in stderr_data.decode().split("\n"):
+        for line in stderr_data.decode(errors="replace").split("\n"):
             match = re.search(r"pts_time:(\d+\.?\d*)", line)
             if match:
                 scene_times.append(float(match.group(1)))

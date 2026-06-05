@@ -26,7 +26,7 @@ async def run_pipeline(task_id: str, url: str, event_queue: asyncio.Queue):
         # Stage 1: Download
         await event_queue.put({
             "type": "progress",
-            "data": {"stage": "downloading", "progress": 0.05, "message": "正在下载视频..."},
+            "data": {"stage": "downloading", "progress": 0.05, "message": "🔗 正在读取视频链接，准备下载..."},
         })
         meta = await download_video(url, task_dir)
         await event_queue.put({
@@ -39,7 +39,7 @@ async def run_pipeline(task_id: str, url: str, event_queue: asyncio.Queue):
         # Stage 2: Extract audio + frames in parallel
         await event_queue.put({
             "type": "progress",
-            "data": {"stage": "extracting", "progress": 0.15, "message": "正在提取音频和关键帧..."},
+            "data": {"stage": "extracting", "progress": 0.15, "message": "🎬 视频下载完成，正在提取音频与关键帧画面..."},
         })
 
         audio_path, frames = await asyncio.gather(
@@ -55,7 +55,7 @@ async def run_pipeline(task_id: str, url: str, event_queue: asyncio.Queue):
         # Stage 3: ASR
         await event_queue.put({
             "type": "progress",
-            "data": {"stage": "transcribing", "progress": 0.30, "message": "正在识别语音..."},
+            "data": {"stage": "transcribing", "progress": 0.30, "message": "🎙️ 正在识别语音，提取完整口播文案..."},
         })
         transcript = await transcribe_with_whisper(audio_path)
         await event_queue.put({
@@ -102,7 +102,7 @@ async def run_pipeline(task_id: str, url: str, event_queue: asyncio.Queue):
         # Stage 5: Group into segments + generate prompts
         await event_queue.put({
             "type": "progress",
-            "data": {"stage": "generating_prompts", "progress": 0.75, "message": "正在生成创作提示词..."},
+            "data": {"stage": "generating_prompts", "progress": 0.75, "message": "✍️ 正在分析内容节奏，生成创作参考建议..."},
         })
 
         segments = _group_segments(frames, transcript, meta.duration)
@@ -128,7 +128,7 @@ async def run_pipeline(task_id: str, url: str, event_queue: asyncio.Queue):
         # Stage 6: Viral analysis
         await event_queue.put({
             "type": "progress",
-            "data": {"stage": "viral_analysis", "progress": 0.90, "message": "正在分析爆款密码..."},
+            "data": {"stage": "viral_analysis", "progress": 0.90, "message": "🔥 AI 正在综合评估爆款潜力，生成诊断报告（此步骤约需15-30秒，请耐心等待）..."},
         })
 
         full_transcript = " ".join(s.text for s in transcript)

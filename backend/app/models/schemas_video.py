@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Optional
 from pydantic import BaseModel
 
@@ -21,6 +22,7 @@ class VideoMeta(BaseModel):
     shares: Optional[int] = None
     duration: float = 0.0
     thumbnail_url: Optional[str] = None
+    publish_time: Optional[int] = None  # Unix timestamp of publish time
 
 
 class TranscriptWord(BaseModel):
@@ -63,7 +65,14 @@ class SegmentAnalysis(BaseModel):
     ai_prompts: AIPrompts = AIPrompts()
 
 
+class ViralDimension(BaseModel):
+    """Single dimension score with analysis."""
+    score: int = 0          # 0-100
+    analysis: str = ""      # 分析说明
+
+
 class ViralAnalysis(BaseModel):
+    # ── 旧字段（保持兼容）──
     hook_score: int = 0
     hook_analysis: str = ""
     pacing_analysis: str = ""
@@ -72,6 +81,38 @@ class ViralAnalysis(BaseModel):
     target_audience: str = ""
     content_formula: str = ""
     recreation_blueprint: str = ""
+
+    # ── 新增：综合评分 ──
+    viral_score: int = 0                     # 爆款潜力综合评分 0-100
+    viral_level: str = ""                    # 低 / 中 / 高
+    score_disclaimer: str = "评分为参考，不承诺播放效果"
+
+    # ── 新增：数据洞察 ──
+    data_insight: str = ""                   # 基于点赞/转发/评论/发布时间的数据洞察
+
+    # ── 新增：行动建议 ──
+    action_suggestion: str = ""              # 重拍/继续发/改标题/改剪辑/换口吻/调整选题
+    action_reason: str = ""                  # 建议依据说明
+
+    # ── 新增：多维度分析 ──
+    dim_hook: Optional[ViralDimension] = None           # 开头钩子
+    dim_pacing: Optional[ViralDimension] = None         # 内容节奏
+    dim_emotion: Optional[ViralDimension] = None        # 情绪强度
+    dim_comment_bait: Optional[ViralDimension] = None   # 评论点
+    dim_share_bait: Optional[ViralDimension] = None     # 转发点
+    dim_cover_title: Optional[ViralDimension] = None    # 标题封面
+
+    # ── 新增：优化建议套餐 ──
+    new_title: str = ""                      # 建议新标题
+    opening_3s: str = ""                     # 前3秒开头脚本
+    full_script: str = ""                    # 完整口播文案
+    comment_guide: str = ""                  # 评论区引导语
+
+    # ── 新增：服务说明 ──
+    service_notice: str = (
+        "本费用为单次内容诊断服务费，报告由AI辅助生成，"
+        "用户可联系客服申请人工复核"
+    )
 
 
 class FullAnalysisResult(BaseModel):
