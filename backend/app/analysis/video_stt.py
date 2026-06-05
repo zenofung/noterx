@@ -21,6 +21,8 @@ import subprocess
 import tempfile
 from typing import Optional
 
+from app.utils.ffmpeg_helper import resolve_binary_path
+
 logger = logging.getLogger("noterx.video_stt")
 
 
@@ -67,7 +69,7 @@ def _probe_video_duration_seconds(video_path: str) -> Optional[float]:
     try:
         proc = subprocess.run(
             [
-                "ffprobe",
+                resolve_binary_path("ffprobe"),
                 "-v",
                 "error",
                 "-show_entries",
@@ -102,7 +104,7 @@ def _extract_wav_segment(video_path: str, *, start_sec: float, clip_sec: float) 
     os.close(fd)
     try:
         cmd = [
-            "ffmpeg",
+            resolve_binary_path("ffmpeg"),
             "-y",
             "-ss",
             f"{max(start_sec, 0):.3f}",

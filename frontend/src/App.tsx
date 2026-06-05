@@ -6,7 +6,7 @@ import theme from "./theme";
 import { pageTransition } from "./utils/motion";
 import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
-import AnnouncementDialog from "./components/AnnouncementDialog";
+// import AnnouncementDialog from "./components/AnnouncementDialog";
 import { trackVisit } from "./utils/api";
 import "./index.css";
 
@@ -16,8 +16,10 @@ const Diagnosing = lazy(() => import("./pages/Diagnosing"));
 const Report = lazy(() => import("./pages/Report"));
 const History = lazy(() => import("./pages/History"));
 const ScreenshotAnalysis = lazy(() => import("./pages/ScreenshotAnalysis"));
+const VideoAnalysis = lazy(() => import("./pages/VideoAnalysis"));
 
 /* ── Minimal loading fallback ── */
+
 function PageLoader() {
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
@@ -133,6 +135,22 @@ function AnimatedRoutes() {
             </motion.div>
           }
         />
+        <Route
+          path="/video-analysis/:taskId?"
+          element={
+            <motion.div
+              variants={pageTransition}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              style={{ minHeight: "100vh" }}
+            >
+              <Suspense fallback={<PageLoader />}>
+                <VideoAnalysis />
+              </Suspense>
+            </motion.div>
+          }
+        />
       </Routes>
     </AnimatePresence>
   );
@@ -160,7 +178,7 @@ function App() {
           <VisitTracker />
           <AnimatedRoutes />
           <ToastContainer />
-          <AnnouncementDialog />
+
         </BrowserRouter>
       </ErrorBoundary>
     </ThemeProvider>

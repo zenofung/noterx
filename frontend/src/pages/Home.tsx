@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
@@ -12,8 +12,9 @@ import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CategoryPicker from "../components/CategoryPicker";
 import UploadZone from "../components/UploadZone";
-import { quickRecognize, quickRecognizeVideo, getApiHealth } from "../utils/api";
+import { quickRecognize, quickRecognizeVideo, getApiHealth, startVideoAnalysis } from "../utils/api";
 import type { QuickRecognizeResult } from "../utils/api";
+
 
 /** @returns A stable key for a File object */
 function fkey(f: File) {
@@ -138,6 +139,37 @@ export default function Home() {
   const [userEdited, setUserEdited] = useState({ title: false, content: false, category: false });
   /** null=探测中；false=连不上本机 API（多为未启动或 Vite 代理端口不对） */
   const [apiReachable, setApiReachable] = useState<boolean | null>(null);
+
+  const [mode, setMode] = useState<"video" | "image">("video");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState("");
+
+  const handleVideoSubmit = async () => {
+    if (!videoUrl.trim()) {
+      setVideoError("请输入视频链接");
+      return;
+    }
+    setVideoError("");
+    setVideoLoading(true);
+    try {
+      const res = await startVideoAnalysis(videoUrl.trim());
+      navigate(`/video-analysis/${res.task_id}`);
+    } catch (e: any) {
+      console.error(e);
+      let errMsg = "发起分析失败，请确认后端已启动并且接口通畅";
+      if (e.response?.data?.detail) {
+        const d = e.response.data.detail;
+        errMsg = typeof d === "string" ? d : JSON.stringify(d);
+      } else if (e.message) {
+        errMsg = e.message;
+      }
+      setVideoError(errMsg);
+    } finally {
+      setVideoLoading(false);
+    }
+  };
+
 
   const uploadPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const analyzePulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -666,242 +698,378 @@ export default function Home() {
         </Box>
       </Box>
 
-      {/* ═══ Work area — 填满剩余空间，桌面不滚动 ═══ */}
-      <Box sx={{
-        flex: 1,
-        display: "flex", justifyContent: "center", alignItems: "stretch",
-        px: { xs: 0, md: 3 },
-        py: { xs: 0, md: 2 },
-        pb: { xs: "100px", md: 2 },
-        overflow: { xs: "auto", md: "hidden" },
-        minHeight: 0,
-      }}>
-        <Box sx={{
-          width: "100%", maxWidth: 1000,
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "1.2fr 1fr" },
-          gap: { xs: 0, md: 2 },
-          alignItems: "stretch",
-          minHeight: 0,
-        }}>
-
-          {/* ═══ Left: Upload ═══ */}
-          <Box sx={{
-            bgcolor: "#fff",
-            border: { md: "1px solid #f0f0f0" },
-            borderBottom: { xs: "1px solid #f0f0f0", md: "1px solid #f0f0f0" },
-            borderRadius: { xs: 0, md: "14px" },
-            p: { xs: 2, md: 2.5 },
-            display: "flex", flexDirection: "column",
-            gap: 1.5,
-            minHeight: 0,
-            overflow: "hidden",
-          }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-              <Box>
-                <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#262626" }}>
-                  上传笔记素材
-                </Typography>
-                <Typography sx={{ fontSize: 12, color: "#999", mt: 0.25 }}>
-                  把小红书截图拖进来，AI 自动识别标题、正文、分类
-                </Typography>
-              </Box>
-              {files.length > 0 && (
-                <Chip size="small" label={`${files.length}/9`} sx={{
-                  height: 22, fontSize: 10, fontWeight: 700,
-                  bgcolor: isReady && hasRecogSuccess ? "#f0fdf4" : isReady ? "#fff7ed" : "#eff6ff",
-                  color: isReady && hasRecogSuccess ? "#16a34a" : isReady ? "#c2410c" : "#2563eb",
-                  border: isReady && hasRecogSuccess ? "1px solid #bbf7d0" : isReady ? "1px solid #fed7aa" : "1px solid #bfdbfe",
-                }} />
-              )}
-            </Box>
-
-            {apiReachable === false && (
-              <Alert severity="warning" sx={{ fontSize: 12, py: 0.5, borderRadius: "10px" }}>
-                无法连接本机诊断 API（/api/health）。请启动后端，并确认 Vite 代理端口与之一致（默认 8000，可在 frontend/.env 设置
-                VITE_API_PROXY_TARGET）。
-              </Alert>
-            )}
-
-            <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-              <UploadZone files={files} onFilesChange={handleFilesChange} maxFiles={9} compact={isDesktop} />
-            </Box>
-
-            {/* Slot chips */}
-            <AnimatePresence>
-              {files.length > 0 && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
-                  style={{ flexShrink: 0 }}>
-                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "center" }}>
-                    {Object.entries(slotLabelMap).map(([slot, label]) => (
-                      <Chip key={slot} size="small" label={label}
-                        color={recognizedSlots.has(slot) ? "success" : "default"}
-                        variant={recognizedSlots.has(slot) ? "filled" : "outlined"}
-                        sx={{ fontSize: 10, height: 20 }} />
-                    ))}
-                  </Box>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* AI analysis progress bar — smooth */}
-            <AnimatePresence>
-              {(anyLoading || pendingRecognition) && files.length > 0 && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }}
-                  style={{ flexShrink: 0 }}>
-                  <Box sx={{ px: 0.5 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
-                      <AnalysisStatusText />
-                      <Typography sx={{ fontSize: 10, color: "#ccc", fontVariantNumeric: "tabular-nums" }}>
-                        {Object.keys(aiRecogs).length}/{Math.max(recognizeFileKeys.size, 1)}
-                      </Typography>
-                    </Box>
-                    <SmoothProgressBar
-                      done={Object.keys(aiRecogs).length}
-                      total={Math.max(recognizeFileKeys.size, 1)}
-                    />
-                  </Box>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Ready state：仅在有成功识别时显示完成提示；全部失败只显示下方红字 */}
-            {isReady && files.length > 0 && hasRecogSuccess && !anyFailed && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 0.5 }}>
-                <CheckCircleIcon sx={{ fontSize: 13, color: "#16a34a" }} />
-                <Typography sx={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>分析完成，可以开始诊断</Typography>
-              </Box>
-            )}
-            {allFailed && (
-              <Typography sx={{ fontSize: 11, color: "#dc2626", px: 0.5, lineHeight: 1.5 }}>
-                {firstRecognizeError
-                  ? `识别失败：${firstRecognizeError}`
-                  : "识别失败，请检查网络或手动输入"}
-              </Typography>
-            )}
-            {!allFailed && anyFailed && firstRecognizeError && (
-              <Typography sx={{ fontSize: 11, color: "#dc2626", px: 0.5, lineHeight: 1.5 }}>
-                {`部分素材识别失败：${firstRecognizeError}`}
-              </Typography>
-            )}
-
-          </Box>
-
-          {/* ═══ Right: Form ═══ */}
-          <Box sx={{
-            bgcolor: "#fff",
-            border: { md: "1px solid #f0f0f0" },
-            borderRadius: { xs: 0, md: "14px" },
-            p: { xs: 2, md: 2.5 },
-            display: "flex", flexDirection: "column",
-            gap: 1.75,
-            minHeight: 0,
-            overflow: { xs: "visible", md: "auto" },
-          }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#262626", flexShrink: 0 }}>
-              笔记信息
-            </Typography>
-
-            {videoWithoutImage && allRecognitionDone && !allFailed && (
-              <Alert severity="info" sx={{ fontSize: 12, py: 0.75, borderRadius: "10px", flexShrink: 0 }}>
-                仅上传视频时，笔记标题一般在发布页或信息流封面，很少出现在画面里。请再传一张含标题或封面大字的截图，系统会从截图填标题；视频里的步骤与画面说明会写在正文。
-              </Alert>
-            )}
-
-            {isFormBlocked && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1, py: 0.5, borderRadius: "8px", bgcolor: "#eff6ff", flexShrink: 0 }}>
-                <CircularProgress size={12} thickness={5} sx={{ color: "#3b82f6" }} />
-                <Typography sx={{ fontSize: 12, color: "#3b82f6", fontWeight: 500 }}>AI 识别中，完成后自动填入</Typography>
-              </Box>
-            )}
-
-            <Box sx={{
-              flex: 1, minHeight: 0,
-              opacity: isFormBlocked ? 0.4 : 1,
-              pointerEvents: isFormBlocked ? "none" : "auto",
-              transition: "opacity 0.3s",
-              display: "flex", flexDirection: "column", gap: 1.75,
-            }}>
-              <Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#262626" }}>标题</Typography>
-                  {autoFilled.title && <Typography sx={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>AI 已填</Typography>}
-                </Box>
-                <TextField required fullWidth size="small" disabled={lockInputs} value={title}
-                  onChange={(e) => { setTitle(e.target.value); setUserEdited((p) => ({ ...p, title: true })); }}
-                  placeholder="笔记标题" slotProps={{ htmlInput: { maxLength: 100 } }} />
-                {showWarnings && warnings.title && !title.trim() && !userEdited.title && (
-                  <Typography sx={{ fontSize: 11, color: "#d97706", mt: 0.5 }}>请手动输入标题</Typography>
-                )}
-              </Box>
-
-              <Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#262626" }}>正文</Typography>
-                  {autoFilled.content && <Typography sx={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>AI 已填</Typography>}
-                </Box>
-                <TextField fullWidth multiline rows={isDesktop ? 3 : 3} size="small" disabled={lockInputs} value={content}
-                  onChange={(e) => { setContent(e.target.value); setUserEdited((p) => ({ ...p, content: true })); }}
-                  placeholder="笔记正文（可选）" />
-              </Box>
-
-              <Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.75 }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#262626" }}>垂类</Typography>
-                  {autoFilled.category && <Typography sx={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>AI 已识别</Typography>}
-                </Box>
-                <CategoryPicker value={category} onChange={(v) => { setCategory(v); setUserEdited((p) => ({ ...p, category: true })); }} />
-              </Box>
-            </Box>
-
-            {/* Desktop CTA */}
-            <Box sx={{ display: { xs: "none", md: "flex" }, flexDirection: "column", gap: 1, flexShrink: 0, pt: 0.5 }}>
-              <Button variant="contained" fullWidth disabled={!canSubmit} onClick={handleSubmit}
-                sx={{
-                  py: 1.1, fontSize: 14, fontWeight: 700, borderRadius: "10px", minHeight: 42,
-                  background: "#ff2442", boxShadow: "0 4px 16px rgba(255,36,66,0.25)",
-                  "&:hover": { background: "#e61e3d", transform: "translateY(-1px)", boxShadow: "0 6px 24px rgba(255,36,66,0.35)" },
-                  "&:active": { transform: "translateY(0)" },
-                  "&.Mui-disabled": { background: "#eee", boxShadow: "none", color: "#bbb" },
-                }}
-              >
-                开始诊断
-              </Button>
-              {files.length > 0 && allRecognitionDone && !hasDetailScreenshot && (
-                <Typography sx={{ fontSize: 10, color: "#d97706", textAlign: "center" }}>建议补充详情页截图</Typography>
-              )}
-            </Box>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* ═══ Mobile fixed CTA ═══ */}
-      <Box sx={{
-        display: { xs: "block", md: "none" },
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30,
-        px: 1.5, pt: 1,
-        pb: "max(8px, env(safe-area-inset-bottom))",
-        bgcolor: "rgba(255,255,255,0.95)", borderTop: "1px solid #f0f0f0",
-      }}>
-        <Button variant="contained" fullWidth onClick={handleSubmit}
+      {/* ═══ Mode Switcher ═══ */}
+      <Box sx={{ display: "flex", justifyContent: "center", gap: 2, mt: 3, mb: 1, flexShrink: 0 }}>
+        <Button
+          onClick={() => setMode("video")}
+          variant={mode === "video" ? "contained" : "outlined"}
           sx={{
-            py: 1.1, fontSize: 15, fontWeight: 700, borderRadius: "10px", minHeight: 46,
-            background: canSubmit ? "#ff2442" : "#eee",
-            boxShadow: canSubmit ? "0 4px 16px rgba(255,36,66,0.25)" : "none",
-            color: canSubmit ? "#fff" : "#bbb",
-            "&:hover": { background: canSubmit ? "#e61e3d" : "#eee" },
+            borderRadius: "20px",
+            px: 3,
+            py: 0.8,
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            textTransform: "none",
+            borderColor: "#ff2442",
+            color: mode === "video" ? "#fff" : "#ff2442",
+            background: mode === "video" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "transparent",
+            "&:hover": {
+              background: mode === "video" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "rgba(255,36,66,0.04)",
+              borderColor: "#ff2442",
+            }
           }}
         >
-          开始诊断
+          🎬 短视频分析 (链接)
         </Button>
-        {submitError && (
-          <Typography sx={{ fontSize: 11, color: "#dc2626", textAlign: "center", mt: 0.5 }}>
-            {submitError}
-          </Typography>
-        )}
+        <Button
+          onClick={() => setMode("image")}
+          variant={mode === "image" ? "contained" : "outlined"}
+          sx={{
+            borderRadius: "20px",
+            px: 3,
+            py: 0.8,
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            textTransform: "none",
+            borderColor: "#ff2442",
+            color: mode === "image" ? "#fff" : "#ff2442",
+            background: mode === "image" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "transparent",
+            "&:hover": {
+              background: mode === "image" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "rgba(255,36,66,0.04)",
+              borderColor: "#ff2442",
+            }
+          }}
+        >
+          📷 图文笔记诊断 (截图)
+        </Button>
       </Box>
+
+      {mode === "video" ? (
+        <Box sx={{
+          flex: 1,
+          display: "flex", justifyContent: "center", alignItems: "center",
+          px: { xs: 2, md: 3 },
+          py: { xs: 2, md: 4 },
+          overflow: "auto",
+        }}>
+          <Box sx={{
+            width: "100%", maxWidth: 600,
+            bgcolor: "#fff",
+            border: "1px solid #f0f0f0",
+            borderRadius: "20px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.03)",
+            p: { xs: 3, sm: 5 },
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 3,
+          }}>
+            <Box sx={{
+              width: 64, height: 64, borderRadius: "20px",
+              background: "linear-gradient(135deg, rgba(255,36,66,0.08), rgba(255,107,129,0.06))",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontSize: 32 }}>🎬</span>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: 18, fontWeight: 800, color: "#262626" }}>
+                爆款短视频拉片分析
+              </Typography>
+              <Typography sx={{ fontSize: 13, color: "#888", mt: 1, px: 2, lineHeight: 1.6 }}>
+                输入抖音视频链接（支持短链接），系统将自动拦截下载、提取逐秒画面及完整口播文案，并通过 AI 进行多模态爆款密码分析。
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: "100%", mt: 1 }}>
+              <TextField
+                fullWidth
+                placeholder="粘贴抖音视频分享链接，例如：https://v.douyin.com/xxx/"
+                value={videoUrl}
+                onChange={(e) => {
+                  setVideoUrl(e.target.value);
+                  if (videoError) setVideoError("");
+                }}
+                disabled={videoLoading}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "12px",
+                  }
+                }}
+              />
+              {videoError && (
+                <Typography sx={{ fontSize: 12, color: "#dc2626", mt: 1, textAlign: "left" }}>
+                  ⚠️ {videoError}
+                </Typography>
+              )}
+            </Box>
+
+            <Button
+              variant="contained"
+              fullWidth
+              disabled={videoLoading}
+              onClick={handleVideoSubmit}
+              sx={{
+                py: 1.5,
+                fontSize: 15,
+                fontWeight: 700,
+                borderRadius: "12px",
+                background: "linear-gradient(135deg, #ff5c6f, #e61e3d)",
+                boxShadow: "0 4px 16px rgba(255,36,66,0.2)",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #e61e3d, #cc1a35)",
+                  boxShadow: "0 6px 24px rgba(255,36,66,0.3)",
+                }
+              }}
+            >
+              {videoLoading ? <CircularProgress size={24} sx={{ color: "#fff" }} /> : "开始拉片分析"}
+            </Button>
+
+            <Typography sx={{ fontSize: 11, color: "#bbb", mt: 1 }}>
+              此分析过程需要进行抽帧及大模型多模态处理，通常耗时 1-3 分钟。
+            </Typography>
+          </Box>
+        </Box>
+      ) : (
+        <>
+          {/* ═══ Work area — 填满剩余空间，桌面不滚动 ═══ */}
+          <Box sx={{
+            flex: 1,
+            display: "flex", justifyContent: "center", alignItems: "stretch",
+            px: { xs: 0, md: 3 },
+            py: { xs: 0, md: 2 },
+            pb: { xs: "100px", md: 2 },
+            overflow: { xs: "auto", md: "hidden" },
+            minHeight: 0,
+          }}>
+            <Box sx={{
+              width: "100%", maxWidth: 1000,
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1.2fr 1fr" },
+              gap: { xs: 0, md: 2 },
+              alignItems: "stretch",
+              minHeight: 0,
+            }}>
+
+              {/* ═══ Left: Upload ═══ */}
+              <Box sx={{
+                bgcolor: "#fff",
+                border: { md: "1px solid #f0f0f0" },
+                borderBottom: { xs: "1px solid #f0f0f0", md: "1px solid #f0f0f0" },
+                borderRadius: { xs: 0, md: "14px" },
+                p: { xs: 2, md: 2.5 },
+                display: "flex", flexDirection: "column",
+                gap: 1.5,
+                minHeight: 0,
+                overflow: "hidden",
+              }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+                  <Box>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#262626" }}>
+                      上传笔记素材
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: "#999", mt: 0.25 }}>
+                      把小红书截图拖进来，AI 自动识别标题、正文、分类
+                    </Typography>
+                  </Box>
+                  {files.length > 0 && (
+                    <Chip size="small" label={`${files.length}/9`} sx={{
+                      height: 22, fontSize: 10, fontWeight: 700,
+                      bgcolor: isReady && hasRecogSuccess ? "#f0fdf4" : isReady ? "#fff7ed" : "#eff6ff",
+                      color: isReady && hasRecogSuccess ? "#16a34a" : isReady ? "#c2410c" : "#2563eb",
+                      border: isReady && hasRecogSuccess ? "1px solid #bbf7d0" : isReady ? "1px solid #fed7aa" : "1px solid #bfdbfe",
+                    }} />
+                  )}
+                </Box>
+
+                {apiReachable === false && (
+                  <Alert severity="warning" sx={{ fontSize: 12, py: 0.5, borderRadius: "10px" }}>
+                    无法连接本机诊断 API（/api/health）。请启动后端，并确认 Vite 代理端口与之一致（默认 8000，可在 frontend/.env 设置
+                    VITE_API_PROXY_TARGET）。
+                  </Alert>
+                )}
+
+                <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                  <UploadZone files={files} onFilesChange={handleFilesChange} maxFiles={9} compact={isDesktop} />
+                </Box>
+
+                {/* Slot chips */}
+                <AnimatePresence>
+                  {files.length > 0 && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
+                      style={{ flexShrink: 0 }}>
+                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "center" }}>
+                        {Object.entries(slotLabelMap).map(([slot, label]) => (
+                          <Chip key={slot} size="small" label={label}
+                            color={recognizedSlots.has(slot) ? "success" : "default"}
+                            variant={recognizedSlots.has(slot) ? "filled" : "outlined"}
+                            sx={{ fontSize: 10, height: 20 }} />
+                        ))}
+                      </Box>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* AI analysis progress bar — smooth */}
+                <AnimatePresence>
+                  {(anyLoading || pendingRecognition) && files.length > 0 && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }}
+                      style={{ flexShrink: 0 }}>
+                      <Box sx={{ px: 0.5 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                          <AnalysisStatusText />
+                          <Typography sx={{ fontSize: 10, color: "#ccc", fontVariantNumeric: "tabular-nums" }}>
+                            {Object.keys(aiRecogs).length}/{Math.max(recognizeFileKeys.size, 1)}
+                          </Typography>
+                        </Box>
+                        <SmoothProgressBar
+                          done={Object.keys(aiRecogs).length}
+                          total={Math.max(recognizeFileKeys.size, 1)}
+                        />
+                      </Box>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Ready state：仅在有成功识别时显示完成提示；全部失败只显示下方红字 */}
+                {isReady && files.length > 0 && hasRecogSuccess && !anyFailed && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 0.5 }}>
+                    <CheckCircleIcon sx={{ fontSize: 13, color: "#16a34a" }} />
+                    <Typography sx={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>分析完成，可以开始诊断</Typography>
+                  </Box>
+                )}
+                {allFailed && (
+                  <Typography sx={{ fontSize: 11, color: "#dc2626", px: 0.5, lineHeight: 1.5 }}>
+                    {firstRecognizeError
+                      ? `识别失败：${firstRecognizeError}`
+                      : "识别失败，请检查网络或手动输入"}
+                  </Typography>
+                )}
+                {!allFailed && anyFailed && firstRecognizeError && (
+                  <Typography sx={{ fontSize: 11, color: "#dc2626", px: 0.5, lineHeight: 1.5 }}>
+                    {`部分素材识别失败：${firstRecognizeError}`}
+                  </Typography>
+                )}
+
+              </Box>
+
+              {/* ═══ Right: Form ═══ */}
+              <Box sx={{
+                bgcolor: "#fff",
+                border: { md: "1px solid #f0f0f0" },
+                borderRadius: { xs: 0, md: "14px" },
+                p: { xs: 2, md: 2.5 },
+                display: "flex", flexDirection: "column",
+                gap: 1.75,
+                minHeight: 0,
+                overflow: { xs: "visible", md: "auto" },
+              }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#262626", flexShrink: 0 }}>
+                  笔记信息
+                </Typography>
+
+                {videoWithoutImage && allRecognitionDone && !allFailed && (
+                  <Alert severity="info" sx={{ fontSize: 12, py: 0.75, borderRadius: "10px", flexShrink: 0 }}>
+                    仅上传视频时，笔记标题一般在发布页或信息流封面，很少出现在画面里。请再传一张含标题或封面大字的截图，系统会从截图填标题；视频里的步骤与画面说明会写在正文。
+                  </Alert>
+                )}
+
+                {isFormBlocked && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1, py: 0.5, borderRadius: "8px", bgcolor: "#eff6ff", flexShrink: 0 }}>
+                    <CircularProgress size={12} thickness={5} sx={{ color: "#3b82f6" }} />
+                    <Typography sx={{ fontSize: 12, color: "#3b82f6", fontWeight: 500 }}>AI 识别中，完成后自动填入</Typography>
+                  </Box>
+                )}
+
+                <Box sx={{
+                  flex: 1, minHeight: 0,
+                  opacity: isFormBlocked ? 0.4 : 1,
+                  pointerEvents: isFormBlocked ? "none" : "auto",
+                  transition: "opacity 0.3s",
+                  display: "flex", flexDirection: "column", gap: 1.75,
+                }}>
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#262626" }}>标题</Typography>
+                      {autoFilled.title && <Typography sx={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>AI 已填</Typography>}
+                    </Box>
+                    <TextField required fullWidth size="small" disabled={lockInputs} value={title}
+                      onChange={(e) => { setTitle(e.target.value); setUserEdited((p) => ({ ...p, title: true })); }}
+                      placeholder="笔记标题" slotProps={{ htmlInput: { maxLength: 100 } }} />
+                    {showWarnings && warnings.title && !title.trim() && !userEdited.title && (
+                      <Typography sx={{ fontSize: 11, color: "#d97706", mt: 0.5 }}>请手动输入标题</Typography>
+                    )}
+                  </Box>
+
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#262626" }}>正文</Typography>
+                      {autoFilled.content && <Typography sx={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>AI 已填</Typography>}
+                    </Box>
+                    <TextField fullWidth multiline rows={isDesktop ? 3 : 3} size="small" disabled={lockInputs} value={content}
+                      onChange={(e) => { setContent(e.target.value); setUserEdited((p) => ({ ...p, content: true })); }}
+                      placeholder="笔记正文（可选）" />
+                  </Box>
+
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.75 }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#262626" }}>垂类</Typography>
+                      {autoFilled.category && <Typography sx={{ fontSize: 10, color: "#16a34a", fontWeight: 600 }}>AI 已识别</Typography>}
+                    </Box>
+                    <CategoryPicker value={category} onChange={(v) => { setCategory(v); setUserEdited((p) => ({ ...p, category: true })); }} />
+                  </Box>
+                </Box>
+
+                {/* Desktop CTA */}
+                <Box sx={{ display: { xs: "none", md: "flex" }, flexDirection: "column", gap: 1, flexShrink: 0, pt: 0.5 }}>
+                  <Button variant="contained" fullWidth disabled={!canSubmit} onClick={handleSubmit}
+                    sx={{
+                      py: 1.1, fontSize: 14, fontWeight: 700, borderRadius: "10px", minHeight: 42,
+                      background: "#ff2442", boxShadow: "0 4px 16px rgba(255,36,66,0.25)",
+                      "&:hover": { background: "#e61e3d", transform: "translateY(-1px)", boxShadow: "0 6px 24px rgba(255,36,66,0.35)" },
+                      "&:active": { transform: "translateY(0)" },
+                      "&.Mui-disabled": { background: "#eee", boxShadow: "none", color: "#bbb" },
+                    }}
+                  >
+                    开始诊断
+                  </Button>
+                  {files.length > 0 && allRecognitionDone && !hasDetailScreenshot && (
+                    <Typography sx={{ fontSize: 10, color: "#d97706", textAlign: "center" }}>建议补充详情页截图</Typography>
+                  )}
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+
+          {/* ═══ Mobile fixed CTA ═══ */}
+          <Box sx={{
+            display: { xs: "block", md: "none" },
+            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30,
+            px: 1.5, pt: 1,
+            pb: "max(8px, env(safe-area-inset-bottom))",
+            bgcolor: "rgba(255,255,255,0.95)", borderTop: "1px solid #f0f0f0",
+          }}>
+            <Button variant="contained" fullWidth onClick={handleSubmit}
+              sx={{
+                py: 1.1, fontSize: 15, fontWeight: 700, borderRadius: "10px", minHeight: 46,
+                background: canSubmit ? "#ff2442" : "#eee",
+                boxShadow: canSubmit ? "0 4px 16px rgba(255,36,66,0.25)" : "none",
+                color: canSubmit ? "#fff" : "#bbb",
+                "&:hover": { background: canSubmit ? "#e61e3d" : "#eee" },
+              }}
+            >
+              开始诊断
+            </Button>
+            {submitError && (
+              <Typography sx={{ fontSize: 11, color: "#dc2626", textAlign: "center", mt: 0.5 }}>
+                {submitError}
+              </Typography>
+            )}
+          </Box>
+        </>
+      )}
 
       {/* ═══ Footer — legal links ═══ */}
       <Box sx={{

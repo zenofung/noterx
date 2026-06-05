@@ -1,0 +1,238 @@
+{
+  "task_id": "test1234",
+  "video_meta": {
+    "title": "教你在家做超松软的手工生吐司，保姆级教程，新手一次成功！",
+    "author": "烘焙大师阿强",
+    "author_id": "bakery_qiang_666",
+    "likes": 128500,
+    "comments": 3420,
+    "shares": 52100,
+    "duration": 9.5,
+    "thumbnail_url": "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400"
+  },
+  "transcript": [
+    {
+      "text": "为什么你做的吐司硬得像石头？今天阿强手把手教你做超松软的生吐司！",
+      "start": 0.0,
+      "end": 3.5,
+      "words": [
+        {
+          "word": "为什么",
+          "start": 0.0,
+          "end": 0.5
+        },
+        {
+          "word": "你做的",
+          "start": 0.5,
+          "end": 0.9
+        },
+        {
+          "word": "吐司",
+          "start": 0.9,
+          "end": 1.2
+        },
+        {
+          "word": "硬得像石头",
+          "start": 1.2,
+          "end": 2.0
+        },
+        {
+          "word": "今天阿强",
+          "start": 2.0,
+          "end": 2.6
+        },
+        {
+          "word": "手把手",
+          "start": 2.6,
+          "end": 3.0
+        },
+        {
+          "word": "教你做",
+          "start": 3.0,
+          "end": 3.5
+        }
+      ]
+    },
+    {
+      "text": "首先准备高筋面粉300克，加入酵母4克，温水180毫升拌匀。",
+      "start": 3.5,
+      "end": 6.5,
+      "words": [
+        {
+          "word": "首先",
+          "start": 3.5,
+          "end": 3.9
+        },
+        {
+          "word": "准备",
+          "start": 3.9,
+          "end": 4.2
+        },
+        {
+          "word": "高筋面粉",
+          "start": 4.2,
+          "end": 4.8
+        },
+        {
+          "word": "300克",
+          "start": 4.8,
+          "end": 5.2
+        },
+        {
+          "word": "加入酵母",
+          "start": 5.2,
+          "end": 5.8
+        },
+        {
+          "word": "4克",
+          "start": 5.8,
+          "end": 6.1
+        },
+        {
+          "word": "温水拌匀",
+          "start": 6.1,
+          "end": 6.5
+        }
+      ]
+    },
+    {
+      "text": "揉面至能拉出手套膜，烤箱预热180度，烤30分钟即可出炉！",
+      "start": 6.5,
+      "end": 9.5,
+      "words": [
+        {
+          "word": "揉面",
+          "start": 6.5,
+          "end": 7.0
+        },
+        {
+          "word": "至能拉出",
+          "start": 7.0,
+          "end": 7.5
+        },
+        {
+          "word": "手套膜",
+          "start": 7.5,
+          "end": 8.0
+        },
+        {
+          "word": "烤箱预热",
+          "start": 8.0,
+          "end": 8.5
+        },
+        {
+          "word": "烤30分钟",
+          "start": 8.5,
+          "end": 9.0
+        },
+        {
+          "word": "出炉",
+          "start": 9.0,
+          "end": 9.5
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "start_time": 0.0,
+      "end_time": 3.0,
+      "frames": [
+        {
+          "timestamp": 0.0,
+          "frame_path": "frames/001_0.0s.jpg",
+          "shot_type": "中景",
+          "camera_movement": "固定",
+          "composition": "三分法构图",
+          "transition": "无(首帧)",
+          "text_overlay": "吐司硬得像石头？",
+          "visual_description": "阿强在明亮的厨房里，双手拿着一块非常生硬的面包，用力敲击桌面发出闷响。",
+          "mood": "搞笑/夸张",
+          "key_elements": [
+            "阿强",
+            "硬面包",
+            "厨房桌面"
+          ]
+        }
+      ],
+      "transcript": "为什么你做的吐司硬得像石头？今天阿强手把手教你做超松软的生吐司！",
+      "ai_prompts": {
+        "visual": "A professional chef in a bright, modern kitchen, holding a hard bread loaf, expressive face, warm lighting, commercial food videography style, 8k resolution.",
+        "copywriting": "痛点引入 + 强力钩子。用夸张对比吸引注意，字数在15-20字左右，情绪饱满急促。",
+        "recreation": "【景别】中景，机位固定。【道具】坚硬的吐司模型，敲击桌面发出敲石头的清脆配音。【演员】面部表情要浮夸，先皱眉无奈，再转为自信微笑。"
+      }
+    },
+    {
+      "start_time": 3.0,
+      "end_time": 6.0,
+      "frames": [
+        {
+          "timestamp": 3.0,
+          "frame_path": "frames/002_3.0s.jpg",
+          "shot_type": "特写",
+          "camera_movement": "推进",
+          "composition": "中心构图",
+          "transition": "硬切",
+          "text_overlay": "高筋面粉 300g",
+          "visual_description": "白色陶瓷碗中盛着细腻的面粉，细细的酵母粉正缓缓撒入碗中。",
+          "mood": "平静/治愈",
+          "key_elements": [
+            "白碗",
+            "高筋面粉",
+            "酵母粉"
+          ]
+        }
+      ],
+      "transcript": "首先准备高筋面粉300克，加入酵母4克，温水180毫升拌匀。",
+      "ai_prompts": {
+        "visual": "Close-up of yeast being sprinkled onto premium white flour in a ceramic bowl, shallow depth of field, soft morning sun, cinematic cooking style.",
+        "copywriting": "保姆级步骤拆解。语速平缓，清晰交代材料配比，配合背景轻快音乐。",
+        "recreation": "【景别】特写/大特写。【运镜】镜头缓慢推近碗部。【后期】在画面一侧使用可爱的花字浮现配比数字，配合轻快的叮咚音效。"
+      }
+    },
+    {
+      "start_time": 6.0,
+      "end_time": 9.5,
+      "frames": [
+        {
+          "timestamp": 6.0,
+          "frame_path": "frames/003_6.0s.jpg",
+          "shot_type": "近景",
+          "camera_movement": "固定",
+          "composition": "留白构图",
+          "transition": "硬切",
+          "text_overlay": "超松软生吐司出炉！",
+          "visual_description": "金黄诱人的生吐司刚刚被切开，露出里面拉丝般的细腻组织，散发着热气。",
+          "mood": "温馨/治愈",
+          "key_elements": [
+            "金黄吐司",
+            "拉丝组织",
+            "热气烘焙"
+          ]
+        }
+      ],
+      "transcript": "揉面至能拉出手套膜，烤箱预热180度，烤30分钟即可出炉！",
+      "ai_prompts": {
+        "visual": "Freshly baked golden milk bread toast being gently pulled apart, steam rising, extremely soft texture, commercial macro shot, appetizing warm tones.",
+        "copywriting": "成果展示与行动呼吁。用视觉暴击配合爽快语气收尾，引导点赞收藏。",
+        "recreation": "【景别】近景特写。【演员】戴防烫手套撕开吐司，动作要缓慢展现弹性。【后期】增加柔光滤镜和热气升腾特效，配乐达到高潮。"
+      }
+    }
+  ],
+  "viral_analysis": {
+    "hook_score": 95,
+    "hook_analysis": "前3秒‘硬面包敲桌子’的搞笑视觉冲突极强，迅速确立痛点问题，完播率高。",
+    "pacing_analysis": "全片节奏极快，9.5秒内包含痛点引入、材料配比、成品展示三个阶段，无任何尿点。",
+    "emotional_arc": "开头（痛点沮丧敲桌） -> 中期（平静有序的烘焙制作） -> 结尾（诱人成品出炉的高能量治愈与满足感）。",
+    "key_viral_factors": [
+      "搞笑痛点钩子",
+      "极简保姆级步骤",
+      "高诱惑力成品特写镜头",
+      "清晰轻快的花字包装"
+    ],
+    "target_audience": "烘焙新手、家庭主妇、美食视频爱好者、解压视频受众",
+    "content_formula": "黄金3秒视觉冲突引流 + 简短专业步骤教学 + 治愈系成品暴击收尾",
+    "recreation_blueprint": "1. 拍摄时务必使用侧光或逆光表现吐司内部的拉丝质感和热气升腾的效果。\n2. 配音语气要热情有感染力，音效要密集清脆。"
+  },
+  "created_at": "2026-06-05T14:26:00.000000"
+}
