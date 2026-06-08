@@ -101,7 +101,7 @@ export default function Report() {
     ]).then(([orig, opt]) => {
       setOriginalPreScore(orig.total_score);
       setOptimizedPreScore(opt.total_score);
-    }).catch(() => {}).finally(() => setRescoring(false));
+    }).catch(() => { }).finally(() => setRescoring(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only show comparison if optimized is actually higher
@@ -187,8 +187,8 @@ export default function Report() {
 
       <Box sx={{ maxWidth: 960, mx: "auto", px: { xs: 2, md: 3 }, mt: 2.5 }}>
 
-          {/* Row 1: Score + Dimension + Radar */}
-          <motion.div {...sectionAnim(1)}>
+        {/* Row 1: Score + Dimension + Radar */}
+        <motion.div {...sectionAnim(1)}>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: sectionGap, mb: sectionGap }}>
             <Box sx={card}>
               <ScoreCard score={report.overall_score} grade={report.grade} title={params.title} />
@@ -203,10 +203,10 @@ export default function Report() {
             </Box>
           </Box>
 
-          </motion.div>
+        </motion.div>
 
-          {/* Row 2: Baseline + Suggestions */}
-          <motion.div {...sectionAnim(2)}>
+        {/* Row 2: Baseline + Suggestions */}
+        <motion.div {...sectionAnim(2)}>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "2fr 3fr" }, gap: sectionGap, mb: sectionGap }}>
             <Box sx={card}>
               <Typography sx={{ fontWeight: 600, fontSize: 15, color: "#262626", mb: 2 }}>基线对比</Typography>
@@ -221,10 +221,10 @@ export default function Report() {
             </Box>
           </Box>
 
-          </motion.div>
+        </motion.div>
 
-          {/* Row 3: Optimized content + score comparison */}
-          <motion.div {...sectionAnim(3)}>
+        {/* Row 3: Optimized content + score comparison */}
+        <motion.div {...sectionAnim(3)}>
           {(report.optimized_title || report.optimized_content || report.cover_direction) && (
             <Box sx={{ ...card, mb: sectionGap }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
@@ -376,8 +376,10 @@ export default function Report() {
                         </Box>
                       </Box>
                       <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#ff2442", mb: 0.5 }}>{plan.optimized_title}</Typography>
-                      <Typography sx={{ fontSize: 12, color: "#666", lineHeight: 1.6, mb: 1,
-                        display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      <Typography sx={{
+                        fontSize: 12, color: "#666", lineHeight: 1.6, mb: 1,
+                        display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden"
+                      }}>
                         {plan.optimized_content}
                       </Typography>
                       <Button size="small" onClick={() => copyText(`${plan.optimized_title}\n\n${plan.optimized_content}`, "方案")}
@@ -392,10 +394,10 @@ export default function Report() {
             </Box>
           )}
 
-          </motion.div>
+        </motion.div>
 
-          {/* Row 4: Agent debate + Comments */}
-          <motion.div {...sectionAnim(4)}>
+        {/* Row 4: Agent debate + Comments */}
+        <motion.div {...sectionAnim(4)}>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "3fr 2fr" }, gap: sectionGap, mb: sectionGap }}>
             <Box sx={card}>
               <Typography sx={{ fontWeight: 600, fontSize: 15, color: "#262626", mb: 2 }}>Agent 诊断详情</Typography>
@@ -412,21 +414,21 @@ export default function Report() {
             </Box>
           </Box>
 
-          </motion.div>
+        </motion.div>
 
-          {/* Row 5: Export */}
-          <motion.div {...sectionAnim(5)}>
+        {/* Row 5: Export */}
+        <motion.div {...sectionAnim(5)}>
           <Box sx={card}>
             <DiagnoseCard report={report} title={params.title} />
           </Box>
 
-          </motion.div>
+        </motion.div>
 
-          <motion.div {...sectionAnim(6)}>
+        <motion.div {...sectionAnim(6)}>
           <Typography sx={{ textAlign: "center", fontSize: 12, color: "#ccc", mt: 3 }}>
             本报告由 AI 多 Agent 协作生成，仅供参考
           </Typography>
-          <Typography sx={{ textAlign: "center", fontSize: 11, color: "#ccc", mt: 1 }}>
+          {/* <Typography sx={{ textAlign: "center", fontSize: 11, color: "#ccc", mt: 1 }}>
             NoteRx 是公益开源项目 · 合作联系{" "}
             <Typography component="a" href="mailto:jmr@jiangmuran.com"
               sx={{ fontSize: 11, color: "#ddd", textDecoration: "none", fontWeight: 600, "&:hover": { color: "#ff2442" } }}>
@@ -437,9 +439,9 @@ export default function Report() {
               sx={{ fontSize: 11, color: "#ddd", textDecoration: "none", fontWeight: 600, "&:hover": { color: "#ff2442" } }}>
               GitHub
             </Typography>
-          </Typography>
-          </motion.div>
-        </Box>
+          </Typography> */}
+        </motion.div>
+      </Box>
     </Box>
   );
 }

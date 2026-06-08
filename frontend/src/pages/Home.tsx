@@ -430,9 +430,9 @@ export default function Home() {
       const merged =
         !res.success && !res.error?.trim()
           ? {
-              ...res,
-              error: "识别未返回有效内容，请检查 OPENAI_API_KEY、OPENAI_BASE_URL 与 LLM_MODEL_OMNI",
-            }
+            ...res,
+            error: "识别未返回有效内容，请检查 OPENAI_API_KEY、OPENAI_BASE_URL 与 LLM_MODEL_OMNI",
+          }
           : res;
       setAiRecogs((p) => ({ ...p, [key]: merged }));
     } catch (e: unknown) {
@@ -675,23 +675,29 @@ export default function Home() {
           <Button
             onClick={() => { setLeaving(true); setTimeout(() => { window.location.href = "/"; }, 350); }}
             size="small"
-            sx={{ color: "#999", fontSize: 12, fontWeight: 600, minWidth: "auto", px: 1, borderRadius: "8px",
-              "&:hover": { color: "#ff2442", bgcolor: "#fff0f2" } }}
+            sx={{
+              color: "#999", fontSize: 12, fontWeight: 600, minWidth: "auto", px: 1, borderRadius: "8px",
+              "&:hover": { color: "#ff2442", bgcolor: "#fff0f2" }
+            }}
           >
             白皮书
           </Button>
           <Button startIcon={<HistoryOutlined sx={{ fontSize: 14 }} />}
             onClick={() => navigate("/history")} size="small"
-            sx={{ color: "#999", fontSize: 12, fontWeight: 600, minWidth: "auto", px: 1, borderRadius: "8px",
-              "&:hover": { color: "#262626", bgcolor: "#f5f5f5" } }}
+            sx={{
+              color: "#999", fontSize: 12, fontWeight: 600, minWidth: "auto", px: 1, borderRadius: "8px",
+              "&:hover": { color: "#262626", bgcolor: "#f5f5f5" }
+            }}
           >
             <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>历史</Box>
           </Button>
           <Button startIcon={<EmailOutlinedIcon sx={{ fontSize: 14 }} />}
             component="a" href="mailto:jmr@jiangmuran.com" size="small"
-            sx={{ color: "#999", fontSize: 12, fontWeight: 600, minWidth: "auto", px: 1, borderRadius: "8px",
+            sx={{
+              color: "#999", fontSize: 12, fontWeight: 600, minWidth: "auto", px: 1, borderRadius: "8px",
               textDecoration: "none",
-              "&:hover": { color: "#ff2442", bgcolor: "#fff0f2" } }}
+              "&:hover": { color: "#ff2442", bgcolor: "#fff0f2" }
+            }}
           >
             <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>联系</Box>
           </Button>
@@ -1103,7 +1109,7 @@ export default function Home() {
           隐私政策
         </Typography>
         <Typography sx={{ fontSize: 11, color: "#ddd" }}>|</Typography>
-        <Typography
+        {/* <Typography
           component="a" href="https://github.com/jiangmuran/noterx" target="_blank"
           sx={{ fontSize: 11, color: "#bbb", textDecoration: "none", "&:hover": { color: "#ff2442" } }}
         >
@@ -1115,7 +1121,7 @@ export default function Home() {
           sx={{ fontSize: 11, color: "#bbb", textDecoration: "none", "&:hover": { color: "#ff2442" } }}
         >
           合作联系 jmr@jiangmuran.com
-        </Typography>
+        </Typography> */}
       </Box>
 
     </Box>

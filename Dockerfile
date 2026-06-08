@@ -27,9 +27,10 @@ ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright/
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
-# Copy the rest of backend and scripts
+# Copy the rest of backend, scripts, and docs
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
+COPY docs/ ./docs/
 
 # Expose backend port
 EXPOSE 8000
