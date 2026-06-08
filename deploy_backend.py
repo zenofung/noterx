@@ -6,9 +6,9 @@ Usage: python deploy_backend.py
 import os, sys, tarfile, io, time
 import paramiko
 
-HOST = "38.175.195.71"
+HOST = "123.57.193.103"
 USER = "root"
-PASS = "lFjTQo8NXHN7TfCI"
+PASS = "#,dRm5$nLbsfPQs"
 REMOTE_DIR = "/opt/noterx"
 FRONTEND_DIR = "/www/wwwroot/noterx.muran.tech"
 
@@ -50,6 +50,11 @@ with tarfile.open(fileobj=buf, mode="w:gz") as tar:
     dist = os.path.join(root, "frontend", "dist")
     if os.path.isdir(dist):
         tar.add(dist, arcname="frontend_dist")
+    # Dockerfile, docker-compose.yml, cookies.txt
+    for f in ["Dockerfile", "docker-compose.yml", "cookies.txt"]:
+        p = os.path.join(root, f)
+        if os.path.isfile(p):
+            tar.add(p, arcname=f)
 buf.seek(0)
 print(f"  Packed {len(buf.getvalue())/1024:.0f} KB")
 
@@ -73,26 +78,8 @@ run(ssh, f"cp -r {REMOTE_DIR}/frontend_dist/* {FRONTEND_DIR}/")
 run(ssh, f"rm -rf {REMOTE_DIR}/frontend_dist")
 print("  Frontend OK")
 
-# ============ 5. Backend deps ============
-print("[5/6] Installing backend dependencies (may take a while)...")
-py3 = "python3"
-out, _, _ = run(ssh, f"{py3} --version", check=False)
-has_py3 = "Python 3" in out
-PY = py3 if has_py3 else "python"
-
-# Install python3-venv if missing (Debian/Ubuntu)
-run(ssh, "apt-get install -y python3-venv python3-pip", check=False)
-
-run(ssh, f"rm -rf {REMOTE_DIR}/backend/venv")
-run(ssh, f"{PY} -m venv {REMOTE_DIR}/backend/venv")
-run(ssh, f"{REMOTE_DIR}/backend/venv/bin/pip install --upgrade pip -q")
-run(ssh, f"{REMOTE_DIR}/backend/venv/bin/pip install -r {REMOTE_DIR}/backend/requirements.txt")
-
-# Init DB
-print("  Initializing database...")
-run(ssh, f"cd {REMOTE_DIR} && {REMOTE_DIR}/backend/venv/bin/python scripts/init_db.py", check=False)
-run(ssh, f"cd {REMOTE_DIR} && {REMOTE_DIR}/backend/venv/bin/python scripts/seed_data.py", check=False)
-run(ssh, f"cd {REMOTE_DIR} && {REMOTE_DIR}/backend/venv/bin/python scripts/compute_baseline.py", check=False)
+# ============ 5. Docker build and start ============
+print("[5/6] Building and starting Docker container...")
 
 # Upload .env
 print("  Uploading .env...")
@@ -101,41 +88,33 @@ if os.path.isfile(local_env):
     sftp.put(local_env, f"{REMOTE_DIR}/backend/.env")
     print("  .env uploaded")
 
-# ============ 6. Systemd service ============
-print("[6/6] Setting up systemd service...")
-SERVICE = """[Unit]
-Description=NoteRx Backend
-After=network.target
+# Check if docker command is available
+out, _, _ = run(ssh, "which docker", check=False)
+if not out.strip():
+    print("  [Error] Docker not found on the server! Please install Docker first using the deployment guide.")
+    sys.exit(1)
 
-[Service]
-Type=simple
-WorkingDirectory=/opt/noterx/backend
-ExecStart=/opt/noterx/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
+# Build and start container
+run(ssh, f"cd {REMOTE_DIR} && docker compose down", check=False)
+run(ssh, f"cd {REMOTE_DIR} && docker compose up -d --build")
 
-[Install]
-WantedBy=multi-user.target
-"""
-with sftp.open("/etc/systemd/system/noterx.service", "w") as f:
-    f.write(SERVICE)
-
-run(ssh, "systemctl daemon-reload")
-run(ssh, "systemctl enable noterx")
-run(ssh, "systemctl restart noterx")
-time.sleep(3)
-run(ssh, "systemctl status noterx --no-pager -l", check=False)
+# ============ 6. Verification ============
+print("[6/6] Verifying status...")
+time.sleep(5)
+run(ssh, f"cd {REMOTE_DIR} && docker compose ps", check=False)
 
 # Health check
+print("  Running health check...")
 out, _, _ = run(ssh, "curl -s http://127.0.0.1:8000/api/health", check=False)
+print(f"  Response: {out.strip()}")
+
 print("")
 print("=" * 50)
 print("DEPLOY DONE!")
-print(f"  Backend API: http://127.0.0.1:8000 (Nginx proxy)")
-print(f"  Frontend:    {FRONTEND_DIR}")
-print(f"  Admin:       https://noterx.muran.tech/admin")
-print(f"  Password:    pageone")
+print(f"  Backend API (Docker): http://127.0.0.1:8000")
+print(f"  Frontend:             {FRONTEND_DIR}")
+print(f"  Admin:                https://noterx.muran.tech/admin")
+print(f"  Password:             pageone")
 print("")
 print("Nginx config needed (see below):")
 print("""
@@ -144,6 +123,9 @@ print("""
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_buffering off;
+      proxy_cache off;
+      proxy_read_timeout 600s;
   }
   location /admin {
       proxy_pass http://127.0.0.1:8000;

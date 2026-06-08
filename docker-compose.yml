@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: noterx-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount data folder for persistence (SQLite database, markdown memory, video caches)
+      - ./backend/data:/workspace/backend/data
+      # Mount .env file for environment variables
+      - ./backend/.env:/workspace/backend/.env
+      # Mount cookies.txt if it exists (for scraper auth)
+      - ./cookies.txt:/workspace/backend/cookies.txt
+    environment:
+      - PYTHONUNBUFFERED=1

@@ -790,6 +790,17 @@ export default function Home() {
                   setVideoUrl(e.target.value);
                   if (videoError) setVideoError("");
                 }}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("text");
+                  const match = text.match(
+                    /https?:\/\/[^\s]+(?:douyin|iesdouyin|tiktok)[^\s]*/
+                  );
+                  if (match) {
+                    e.preventDefault();
+                    setVideoUrl(match[0]);
+                    if (videoError) setVideoError("");
+                  }
+                }}
                 disabled={videoLoading}
                 sx={{
                   "& .MuiOutlinedInput-root": {
