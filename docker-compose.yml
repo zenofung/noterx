@@ -13,7 +13,7 @@ services:
       # Mount data folder for persistence (SQLite database, markdown memory, video caches)
       - ./backend/data:/workspace/backend/data
       # Mount .env file for environment variables
-      - ./backend/.env:/workspace/backend/.env
+      - ./.env:/workspace/backend/.env
       # Mount cookies.txt if it exists (for scraper auth)
       - ./cookies.txt:/workspace/backend/cookies.txt
     environment:

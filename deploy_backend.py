@@ -83,7 +83,7 @@ print("[5/6] Building and starting Docker container...")
 
 # Upload .env
 print("  Uploading .env...")
-local_env = os.path.join(root, "backend", ".env")
+local_env = os.path.join(root, ".env")
 if os.path.isfile(local_env):
     sftp.put(local_env, f"{REMOTE_DIR}/backend/.env")
     print("  .env uploaded")

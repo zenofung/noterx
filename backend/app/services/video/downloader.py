@@ -153,20 +153,30 @@ def _fetch_detail_sync(url: str, aweme_id: str) -> dict | None:
             viewport={"width": 1440, "height": 900},
             locale="zh-CN",
         )
+        
+        # --- Debug Cookie Loading ---
         if cookie_header:
-            context.add_cookies(_parse_cookie_header(cookie_header))
-
+            parsed_cookies = _parse_cookie_header(cookie_header)
+            print(f"[Cookie Loader Debug] Loaded {len(parsed_cookies)} cookies to browser context.")
+            context.add_cookies(parsed_cookies)
+        else:
+            print("[Cookie Loader Debug] WARNING: No cookie header loaded.")
+            
         page = context.new_page()
 
         def handle_response(response):
             nonlocal detail_json, filter_reason
+            if "aweme/v1/web/aweme/detail" in response.url:
+                print(f"[Downloader Debug] Intercepted detail API: {response.url} (status: {response.status})")
             if detail_json:
                 return
             if "aweme/v1/web/aweme/detail" not in response.url:
                 return
             try:
                 body = response.json()
-            except Exception:
+                print(f"[Downloader Debug] Detail API response parsed. has_detail: {'aweme_detail' in body}")
+            except Exception as e:
+                print(f"[Downloader Debug] Detail API json parse error: {e}")
                 return
             if body.get("aweme_detail"):
                 detail_json = body
@@ -174,10 +184,12 @@ def _fetch_detail_sync(url: str, aweme_id: str) -> dict | None:
             fd = body.get("filter_detail") or {}
             if fd.get("filter_reason"):
                 filter_reason = fd["filter_reason"]
+                print(f"[Downloader Debug] Filter reason found: {filter_reason}")
 
         page.on("response", handle_response)
 
         try:
+            print(f"[Downloader Debug] Page going to: {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
             # Wait up to 30s for the API response to be intercepted
@@ -189,9 +201,29 @@ def _fetch_detail_sync(url: str, aweme_id: str) -> dict | None:
 
             # Fallback: try SSR data
             if not detail_json:
+                print("[Downloader Debug] API intercept failed, trying SSR fallback...")
                 detail_json = _extract_from_ssr_sync(page, aweme_id)
+                print(f"[Downloader Debug] SSR fallback result: {'success' if detail_json else 'failed'}")
+
+            # Visual Debug: Save screenshot on failure
+            if not detail_json:
+                title = page.title()
+                print(f"[Downloader Debug] FAILED to get details. Page title: {title}")
+                try:
+                    os.makedirs("data", exist_ok=True)
+                    page.screenshot(path="data/debug_playwright.png")
+                    print("[Downloader Debug] Saved screenshot to backend/data/debug_playwright.png for debugging.")
+                except Exception as e:
+                    print(f"[Downloader Debug] Failed to save screenshot: {e}")
 
         except Exception as exc:
+            # Also take a screenshot on navigation errors
+            try:
+                os.makedirs("data", exist_ok=True)
+                page.screenshot(path="data/debug_playwright.png")
+                print("[Downloader Debug] Navigation exception screenshot saved.")
+            except Exception:
+                pass
             raise RuntimeError(_format_exception(exc)) from exc
         finally:
             browser.close()
