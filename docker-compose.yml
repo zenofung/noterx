@@ -21,3 +21,5 @@ services:
       - PYTHONUNBUFFERED=1
       # Explicitly override to ensure cookie file path is correct inside container
       - DOUYIN_COOKIE_FILE=cookies.txt
+      # Use Hugging Face mirror to prevent network unreachable errors when downloading whisper models
+      - HF_ENDPOINT=https://hf-mirror.com

@@ -4,6 +4,18 @@ NoteRx 后端入口
 import logging
 import os
 import sqlite3
+
+# Load .env into os.environ early so that libraries like huggingface_hub can see HF_ENDPOINT
+try:
+    from dotenv import load_dotenv
+    # Explicitly look for the .env in the backend folder or root
+    env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+    else:
+        load_dotenv()
+except ImportError:
+    pass
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

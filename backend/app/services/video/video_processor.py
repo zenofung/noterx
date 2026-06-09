@@ -66,7 +66,8 @@ async def extract_frames(video_path: str, frames_dir: str) -> list[dict]:
     # Configurable interval extraction (e.g. 1 frame per 30 seconds: fps=1/30)
     fps_cmd = [
         resolve_binary_path("ffmpeg"), "-y", "-i", video_path,
-        "-vf", f"fps=1/{interval},scale=1280:-2",
+        "-vf", f"fps=1/{interval},scale=w='if(gt(iw\\,ih)\\,min(1280\\,iw)\\,-2)':h='if(gt(iw\\,ih)\\,-2\\,min(1280\\,ih))'",
+        "-pix_fmt", "yuvj420p",
         "-q:v", "2", "-start_number", "1",
         os.path.join(frames_dir, "%03d.jpg"),
     ]
@@ -85,7 +86,8 @@ async def extract_frames(video_path: str, frames_dir: str) -> list[dict]:
     if scene_detect:
         scene_cmd = [
             resolve_binary_path("ffmpeg"), "-y", "-i", video_path,
-            "-vf", "select='gt(scene,0.3)',showinfo,scale=1280:-2",
+            "-vf", f"select='gt(scene,0.3)',showinfo,scale=w='if(gt(iw\\,ih)\\,min(1280\\,iw)\\,-2)':h='if(gt(iw\\,ih)\\,-2\\,min(1280\\,ih))'",
+            "-pix_fmt", "yuvj420p",
             "-vsync", "vfn", "-q:v", "2",
             os.path.join(frames_dir, "scene_%03d.jpg"),
         ]
