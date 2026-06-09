@@ -12,9 +12,12 @@ services:
     volumes:
       # Mount data folder for persistence (SQLite database, markdown memory, video caches)
       - ./backend/data:/workspace/backend/data
-      # Mount .env file for environment variables
-      - ./.env:/workspace/backend/.env
-      # Mount cookies.txt if it exists (for scraper auth)
+      # Mount cookies.txt for scraper auth
       - ./cookies.txt:/workspace/backend/cookies.txt
+    env_file:
+      # Load ALL env vars from root .env directly into the container environment
+      - ./.env
     environment:
       - PYTHONUNBUFFERED=1
+      # Explicitly override to ensure cookie file path is correct inside container
+      - DOUYIN_COOKIE_FILE=cookies.txt
