@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog, DialogTitle, DialogContent, Box, Tab, Tabs,
   TextField, Button, Typography, CircularProgress,
-  IconButton, useTheme
+  IconButton
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
-import QrCodeIcon from "@mui/icons-material/QrCode";
-import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import PersonOutlinedIcon from "@mui/icons-material/PersonOutlined";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   sendSmsCode, loginWithSms, getWechatQrCode,
@@ -28,7 +27,6 @@ const WeChatSvgIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default function LoginDialog({ open, onClose, onLoginSuccess }: LoginDialogProps) {
-  const theme = useTheme();
   const [tabIndex, setTabIndex] = useState(0);
 
   // --- SMS Auth States ---
@@ -170,7 +168,7 @@ export default function LoginDialog({ open, onClose, onLoginSuccess }: LoginDial
         }
       } catch (e) {
         // Log errors but keep polling (or stop on fatal expired ticket)
-        logger.error("WeChat polling status error:", e);
+        console.error("WeChat polling status error:", e);
       }
     }, 2000);
   };
@@ -273,7 +271,7 @@ export default function LoginDialog({ open, onClose, onLoginSuccess }: LoginDial
       >
         <Tab icon={<PhoneAndroidIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="手机验证码" />
         <Tab icon={<WeChatSvgIcon />} iconPosition="start" label="微信扫码" />
-        <Tab icon={<PersonOutlineIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="游客体验" />
+        <Tab icon={<PersonOutlinedIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="游客体验" />
       </Tabs>
 
       <DialogContent sx={{ p: 0, overflow: "visible" }}>
@@ -499,7 +497,7 @@ export default function LoginDialog({ open, onClose, onLoginSuccess }: LoginDial
                   display: "flex", alignItems: "center", justifyContent: "center",
                   mx: "auto"
                 }}>
-                  <PersonOutlineIcon sx={{ color: "#ff2442", fontSize: 28 }} />
+                  <PersonOutlinedIcon sx={{ color: "#ff2442", fontSize: 28 }} />
                 </Box>
                 
                 <Box>

@@ -122,9 +122,10 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api")
 
-# Admin panel at /admin (no /api prefix)
+# Admin APIs at /api/admin
 from app.api.admin_api import router as admin_router
-app.include_router(admin_router)
+app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+
 
 # ── Landing page: research whitepaper at / ──
 RESEARCH_HTML = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "research_whitepaper.html")

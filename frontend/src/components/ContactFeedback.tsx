@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import HeadsetIcon from "@mui/icons-material/Headset";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import HelpOutlinedIcon from "@mui/icons-material/HelpOutlined";
 import ChatIcon from "@mui/icons-material/Chat";
 import { submitFeedback } from "../utils/api";
 import { showToast } from "./Toast";
@@ -203,7 +203,7 @@ export default function ContactFeedback({
             gap: 1,
           }}
         >
-          <HelpOutlineIcon sx={{ color: "#ff2442" }} />
+          <HelpOutlinedIcon sx={{ color: "#ff2442" }} />
           联系客服留下疑问
           <IconButton
             size="small"
@@ -241,7 +241,7 @@ export default function ContactFeedback({
               onChange={(e) => setMessage(e.target.value)}
               fullWidth
               variant="outlined"
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               sx={{
                 mb: 2,
                 "& .MuiOutlinedInput-root": {
@@ -261,7 +261,7 @@ export default function ContactFeedback({
               onChange={(e) => setContact(e.target.value)}
               fullWidth
               variant="outlined"
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               sx={{
                 mb: 2,
                 "& .MuiOutlinedInput-root": {

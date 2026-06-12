@@ -58,7 +58,7 @@ const GRADE_COLOR: Record<string, string> = {
 };
 
 /** 按创建时间倒序 */
-def sortListItems(a: HistoryListItem, b: HistoryListItem): number {
+function sortListItems(a: HistoryListItem, b: HistoryListItem): number {
   const ta = new Date(
     a.created_at.includes("T") ? a.created_at : a.created_at.replace(" ", "T"),
   ).getTime();

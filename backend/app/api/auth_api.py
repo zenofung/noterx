@@ -63,6 +63,15 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
         )
     
     user_id = payload["sub"]
+    if user_id == "admin" and payload.get("role") == "admin":
+        return {
+            "id": "admin",
+            "nickname": "系统管理员",
+            "avatar_url": "https://api.dicebear.com/7.x/bottts/svg?seed=admin",
+            "role": "admin",
+            "is_guest": False
+        }
+
     user = mysql_helper.execute_query_one(
         "SELECT id, phone, wechat_openid, nickname, avatar_url, role, is_guest, created_at FROM users WHERE id = %s",
         (user_id,)

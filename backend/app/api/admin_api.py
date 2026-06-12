@@ -1,25 +1,23 @@
 """
-管理员统计面板 — 使用追踪 + 系统状态
+管理员后台管理系统 API (FastAPI 版)
 """
 from __future__ import annotations
 
 import hashlib
 import logging
-import os
-import sqlite3
-import time
 from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Query, Depends, status
+from pydantic import BaseModel
+
+from app.api.auth_api import get_current_user, create_access_token
+from app.utils import mysql_helper
 
 router = APIRouter()
 logger = logging.getLogger("noterx.admin")
 
-ADMIN_PASSWORD_SHA512 = "2edcf6be5d8b758e185c1e73d86430bf7c438a87aad4649e185845ddca7b19bdc340ea56e8c5d89e3c60d736d49665c8465567075d1715f3d4d186ee33e9dc9e"
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "baseline.db")
-_start_time = time.time()
-
+ADMIN_PASSWORD_SHA512 = "d790764cc09bc49a5567536766f37dbdae22c72dcb8468b80d81c658f67e71d817b8ceaecb56ccff89ccf9a85025a6432272a481d858c8c405e2ddbcf0f4c187"
 
 def _verify_password(password: str) -> bool:
     import hmac
@@ -28,245 +26,311 @@ def _verify_password(password: str) -> bool:
         ADMIN_PASSWORD_SHA512,
     )
 
-
-def _get_stats() -> dict:
-    stats = {"timestamp": datetime.utcnow().isoformat(), "uptime_seconds": time.time() - _start_time}
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-
-        # Notes
-        cur.execute("SELECT COUNT(*) FROM notes")
-        stats["total_notes"] = cur.fetchone()[0]
-        cur.execute("SELECT category, COUNT(*) FROM notes GROUP BY category ORDER BY COUNT(*) DESC")
-        stats["notes_by_category"] = {r[0]: r[1] for r in cur.fetchall()}
-
-        # Usage log
-        try:
-            cur.execute("SELECT COUNT(*) FROM usage_log")
-            stats["total_requests"] = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(DISTINCT ip) FROM usage_log")
-            stats["unique_ips"] = cur.fetchone()[0]
-            cur.execute("SELECT SUM(total_tokens) FROM usage_log")
-            stats["total_tokens"] = cur.fetchone()[0] or 0
-            cur.execute("SELECT AVG(duration_sec) FROM usage_log WHERE duration_sec > 0")
-            avg = cur.fetchone()[0]
-            stats["avg_duration_sec"] = round(avg, 1) if avg else 0
-
-            # Today
-            cur.execute("SELECT COUNT(*), COUNT(DISTINCT ip) FROM usage_log WHERE date(created_at)=date('now')")
-            row = cur.fetchone()
-            stats["today_requests"] = row[0]
-            stats["today_ips"] = row[1]
-
-            # By category
-            cur.execute("SELECT category, COUNT(*) FROM usage_log GROUP BY category ORDER BY COUNT(*) DESC")
-            stats["usage_by_category"] = {r[0]: r[1] for r in cur.fetchall()}
-
-            # Top IPs
-            cur.execute("SELECT ip, COUNT(*) as c FROM usage_log GROUP BY ip ORDER BY c DESC LIMIT 15")
-            stats["top_ips"] = [{"ip": r[0], "count": r[1]} for r in cur.fetchall()]
-
-            # Recent 20
-            cur.execute("SELECT ip, action, title, category, total_tokens, duration_sec, status, created_at FROM usage_log ORDER BY created_at DESC LIMIT 20")
-            stats["recent_usage"] = [
-                {"ip": r[0], "action": r[1], "title": (r[2] or "")[:30], "category": r[3], "tokens": r[4], "duration": r[5], "status": r[6], "time": r[7]}
-                for r in cur.fetchall()
-            ]
-
-            # Hourly distribution (last 24h)
-            cur.execute("""
-                SELECT strftime('%H', created_at) as hour, COUNT(*) as c
-                FROM usage_log WHERE created_at > datetime('now', '-24 hours')
-                GROUP BY hour ORDER BY hour
-            """)
-            stats["hourly_24h"] = {r[0]: r[1] for r in cur.fetchall()}
-        except Exception:
-            stats["total_requests"] = 0
-            stats["unique_ips"] = 0
-            stats["recent_usage"] = []
-
-        try:
-            cur.execute("SELECT COUNT(*), COUNT(DISTINCT visitor_hash) FROM visit_log")
-            row = cur.fetchone()
-            stats["total_pv"] = row[0]
-            stats["total_uv"] = row[1]
-
-            cur.execute("""
-                SELECT COUNT(*), COUNT(DISTINCT visitor_hash)
-                FROM visit_log WHERE date(created_at)=date('now')
-            """)
-            row = cur.fetchone()
-            stats["today_pv"] = row[0]
-            stats["today_uv"] = row[1]
-
-            cur.execute("""
-                SELECT path, COUNT(*) as c
-                FROM visit_log
-                GROUP BY path ORDER BY c DESC LIMIT 20
-            """)
-            stats["visits_by_path"] = {r[0]: r[1] for r in cur.fetchall()}
-
-            cur.execute("""
-                SELECT strftime('%H', created_at) as hour, COUNT(*) as c
-                FROM visit_log WHERE created_at > datetime('now', '-24 hours')
-                GROUP BY hour ORDER BY hour
-            """)
-            stats["visit_hourly_24h"] = {r[0]: r[1] for r in cur.fetchall()}
-        except Exception:
-            stats["total_pv"] = 0
-            stats["total_uv"] = 0
-            stats["today_pv"] = 0
-            stats["today_uv"] = 0
-            stats["visits_by_path"] = {}
-            stats["visit_hourly_24h"] = {}
-
-        # Engagement
-        cur.execute("""
-            SELECT category, metric_name, metric_value FROM baseline_stats
-            WHERE metric_name IN ('avg_likes','avg_collects','avg_comments','viral_rate')
-        """)
-        eng = {}
-        for r in cur.fetchall():
-            eng.setdefault(r[0], {})[r[1]] = r[2]
-        stats["engagement_by_category"] = eng
-
-    except Exception as e:
-        stats["db_error"] = str(e)
-    finally:
-        if conn:
-            conn.close()
-
-    try:
-        import psutil
-        mem = psutil.virtual_memory()
-        stats["system"] = {"cpu_percent": psutil.cpu_percent(), "memory_used_mb": round(mem.used/1024/1024), "memory_total_mb": round(mem.total/1024/1024), "memory_percent": mem.percent}
-    except ImportError:
-        stats["system"] = {}
-    return stats
+async def get_current_admin(current_user: dict = Depends(get_current_user)):
+    """验证当前登录用户是否是管理员。"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="拒绝访问：无系统管理员权限"
+        )
+    return current_user
 
 
-ADMIN_HTML = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>薯医 Admin</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Inter,'Noto Sans SC',sans-serif;background:#faf9f7;color:#262626;line-height:1.6}
-.login{min-height:100vh;display:flex;align-items:center;justify-content:center}
-.login-box{background:#fff;border:1px solid #f0f0f0;border-radius:16px;padding:40px;max-width:360px;width:100%;text-align:center}
-.login-box h1{font-size:20px;font-weight:800;margin-bottom:8px}
-.login-box p{font-size:13px;color:#999;margin-bottom:24px}
-.login-box input{width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;outline:none}
-.login-box input:focus{border-color:#ff2442}
-.login-box button{width:100%;padding:10px;margin-top:12px;background:#ff2442;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
-.login-box .err{color:#dc2626;font-size:12px;margin-top:8px}
-.d{max-width:960px;margin:0 auto;padding:24px 16px}
-.d h1{font-size:22px;font-weight:800;margin-bottom:4px}
-.d .sub{font-size:12px;color:#999;margin-bottom:20px}
-.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
-.c{background:#fff;border:1px solid #f0f0f0;border-radius:12px;padding:14px}
-.c .l{font-size:10px;color:#999;font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
-.c .v{font-size:24px;font-weight:900;color:#ff2442;margin-top:2px}
-.c .v.g2{color:#16a34a}.c .v.b{color:#3b82f6}.c .v.o{color:#f59e0b}.c .v.sm{font-size:16px}
-.s{font-size:14px;font-weight:700;margin:20px 0 10px}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #f0f0f0;margin-bottom:20px;font-size:12px}
-th{background:#262626;color:#fff;padding:6px 10px;font-size:10px;font-weight:600;text-align:left}
-td{padding:6px 10px;border-bottom:1px solid #f5f5f5}
-tr:hover td{background:#fafafa}
-.bar{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.bar .n{font-size:11px;color:#666;width:50px;text-align:right}
-.bar .t{flex:1;height:5px;background:#f0f0f0;border-radius:3px;overflow:hidden}
-.bar .f{height:100%;background:#ff2442;border-radius:3px}
-.bar .num{font-size:10px;font-weight:600;color:#555;width:30px}
-.ip{font-family:monospace;font-size:11px;color:#666}
-.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600}
-.tag.ok{background:#f0fdf4;color:#16a34a}.tag.err{background:#fef2f2;color:#dc2626}
-.refresh{background:#262626;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
-</style>
-</head>
-<body>
-<div id="app"></div>
-<script>
-const app=document.getElementById('app');let token='';
-function showLogin(err){
-  app.innerHTML=`<div class="login"><div class="login-box"><h1>薯医 Admin</h1><p>管理员面板</p>
-  <input type="password" id="pw" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()">
-  <button onclick="doLogin()">进入</button>${err?'<div class=err>'+err+'</div>':''}</div></div>`;
-  document.getElementById('pw')?.focus();
-}
-async function doLogin(){
-  const pw=document.getElementById('pw').value;
-  try{const r=await fetch('/admin/api/stats?password='+encodeURIComponent(pw));
-  if(!r.ok){showLogin('密码错误');return;}token=pw;showDash(await r.json());}catch(e){showLogin('连接失败');}
-}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function showDash(d){
-  const hrs=d.hourly_24h||{};const maxH=Math.max(...Object.values(hrs),1);
-  const visitHrs=d.visit_hourly_24h||{};const maxVisitH=Math.max(...Object.values(visitHrs),1);
-  const topIps=d.top_ips||[];const maxIp=topIps[0]?.count||1;
-  const usage=d.recent_usage||[];
-  const cats=Object.entries(d.usage_by_category||{});const maxCat=Math.max(...cats.map(c=>c[1]),1);
-  const paths=Object.entries(d.visits_by_path||{});const maxPath=Math.max(...paths.map(c=>c[1]),1);
-  app.innerHTML=`<div class="d">
-  <h1>薯医 Admin</h1><div class="sub">${d.timestamp} · uptime ${Math.round(d.uptime_seconds/60)}min</div>
-  <div class="g">
-    <div class="c"><div class="l">今日访问 UV</div><div class="v b">${d.today_uv||0}</div></div>
-    <div class="c"><div class="l">今日访问 PV</div><div class="v">${d.today_pv||0}</div></div>
-    <div class="c"><div class="l">总访问 UV</div><div class="v o">${d.total_uv||0}</div></div>
-    <div class="c"><div class="l">总访问 PV</div><div class="v g2">${d.total_pv||0}</div></div>
-    <div class="c"><div class="l">今日诊断</div><div class="v sm">${d.today_requests||0}</div></div>
-    <div class="c"><div class="l">诊断 IP</div><div class="v sm">${d.today_ips||0}</div></div>
-    <div class="c"><div class="l">总诊断</div><div class="v sm">${d.total_requests||0}</div></div>
-    <div class="c"><div class="l">总 Token</div><div class="v sm">${(d.total_tokens||0).toLocaleString()}</div></div>
-    <div class="c"><div class="l">平均耗时</div><div class="v sm">${d.avg_duration_sec||0}s</div></div>
-    <div class="c"><div class="l">训练笔记</div><div class="v sm">${d.total_notes||0}</div></div>
-    <div class="c"><div class="l">内存</div><div class="v sm">${d.system?.memory_used_mb||'?'}/${d.system?.memory_total_mb||'?'}</div></div>
-  </div>
-  <div class="s">24h 访问分布</div>
-  <div style="display:flex;gap:3px;align-items:end;height:60px;margin-bottom:16px">
-    ${Array.from({length:24},(_,i)=>{const h=String(i).padStart(2,'0');const v=visitHrs[h]||0;
-    return `<div title="${h}:00 → ${v}次" style="flex:1;background:${v?'#3b82f6':'#f0f0f0'};height:${Math.max(v/maxVisitH*100,2)}%;border-radius:2px;cursor:pointer"></div>`;}).join('')}
-  </div>
-  <div class="s">访问路径分布</div>
-  ${paths.map(([p,n])=>`<div class="bar"><div class="n" title="${esc(p)}">${esc(p).slice(0,18)}</div><div class="t"><div class="f" style="width:${n/maxPath*100}%;background:#3b82f6"></div></div><div class="num">${n}</div></div>`).join('')}
-  <div class="s">24h 诊断请求分布</div>
-  <div style="display:flex;gap:3px;align-items:end;height:60px;margin-bottom:16px">
-    ${Array.from({length:24},(_,i)=>{const h=String(i).padStart(2,'0');const v=hrs[h]||0;
-    return `<div title="${h}:00 → ${v}次" style="flex:1;background:${v?'#ff2442':'#f0f0f0'};height:${Math.max(v/maxH*100,2)}%;border-radius:2px;cursor:pointer"></div>`;}).join('')}
-  </div>
-  <div class="s">品类诊断分布</div>
-  ${cats.map(([c,n])=>`<div class="bar"><div class="n">${c}</div><div class="t"><div class="f" style="width:${n/maxCat*100}%"></div></div><div class="num">${n}</div></div>`).join('')}
-  <div class="s">Top IP</div>
-  <table><tr><th>IP</th><th>次数</th><th>占比</th></tr>
-  ${topIps.map(r=>`<tr><td class="ip">${esc(r.ip)}</td><td>${r.count}</td><td>${d.total_requests?Math.round(r.count/d.total_requests*100):0}%</td></tr>`).join('')}</table>
-  <div class="s">最近诊断</div>
-  <table><tr><th>时间</th><th>IP</th><th>标题</th><th>品类</th><th>Token</th><th>耗时</th><th>状态</th></tr>
-  ${usage.map(r=>`<tr><td style="font-size:10px;color:#999;white-space:nowrap">${(r.time||'').slice(5,16)}</td><td class="ip">${esc(r.ip)}</td><td>${esc(r.title)||'—'}</td><td>${esc(r.category)}</td><td>${r.tokens||0}</td><td>${r.duration||0}s</td><td><span class="tag ${r.status==='ok'?'ok':'err'}">${esc(r.status)}</span></td></tr>`).join('')}
-  ${usage.length===0?'<tr><td colspan=7 style="color:#999;text-align:center">暂无记录</td></tr>':''}</table>
-  <button class="refresh" onclick="doRefresh()">刷新</button>
-  <span id="autoLabel" style="font-size:11px;color:#999;margin-left:12px">每30秒自动刷新</span></div>`;
-}
-async function doRefresh(){
-  if(!token)return;
-  try{const r=await fetch('/admin/api/stats?password='+encodeURIComponent(token));
-  if(r.ok)showDash(await r.json());}catch(e){}
-}
-// Auto-refresh every 30s
-setInterval(()=>{if(token)doRefresh();},30000);
-showLogin();
-</script></body></html>"""
+# Pydantic Schemas
+class AdminLoginRequest(BaseModel):
+    password: str
 
 
-@router.get("/admin", response_class=HTMLResponse)
-async def admin_page():
-    return ADMIN_HTML
-
-
-@router.get("/admin/api/stats")
-async def admin_stats(password: str = Query(...)):
+@router.post("/login")
+async def admin_login(payload: AdminLoginRequest):
+    """管理员登录验证，成功后返回 JWT Token。"""
+    password = payload.password.strip()
+    if not password:
+        raise HTTPException(status_code=400, detail="密码不能为空")
+    
     if not _verify_password(password):
-        raise HTTPException(403, "密码错误")
-    return _get_stats()
+        raise HTTPException(status_code=401, detail="管理员密码错误")
+        
+    token = create_access_token(user_id="admin", role="admin")
+    return {
+        "success": True,
+        "token": token,
+        "user": {
+            "id": "admin",
+            "nickname": "系统管理员",
+            "avatar_url": "https://api.dicebear.com/7.x/bottts/svg?seed=admin",
+            "role": "admin",
+            "is_guest": False
+        }
+    }
+
+
+@router.get("/stats")
+async def get_system_stats(current_admin: dict = Depends(get_current_admin)):
+    """获取管理后台仪表盘综合统计数据。"""
+    try:
+        # Total users & Guest users count
+        user_stats = mysql_helper.execute_query_one(
+            "SELECT COUNT(*) as total_users, SUM(CASE WHEN is_guest = TRUE THEN 1 ELSE 0 END) as total_guests FROM users"
+        )
+        total_users = user_stats["total_users"] or 0
+        total_guests = user_stats["total_guests"] or 0
+        total_members = total_users - total_guests
+
+        # Total note diagnoses
+        note_stats = mysql_helper.execute_query_one("SELECT COUNT(*) as c FROM diagnosis_history")
+        total_notes = note_stats["c"] or 0
+
+        # Total video analyses
+        video_stats = mysql_helper.execute_query_one(
+            "SELECT COUNT(*) as total, SUM(CASE WHEN completed_at IS NOT NULL THEN 1 ELSE 0 END) as completed FROM video_analysis_history"
+        )
+        total_videos = video_stats["total"] or 0
+        completed_videos = video_stats["completed"] or 0
+
+        # Total feedbacks
+        feedback_stats = mysql_helper.execute_query_one("SELECT COUNT(*) as c FROM customer_feedback")
+        total_feedbacks = feedback_stats["c"] or 0
+
+        # Category distribution of note diagnoses
+        note_categories = mysql_helper.execute_query(
+            "SELECT category, COUNT(*) as count FROM diagnosis_history GROUP BY category ORDER BY count DESC"
+        )
+
+        return {
+            "success": True,
+            "counts": {
+                "total_users": total_users,
+                "total_guests": total_guests,
+                "total_members": total_members,
+                "total_notes": total_notes,
+                "total_videos": total_videos,
+                "completed_videos": completed_videos,
+                "total_feedbacks": total_feedbacks,
+            },
+            "note_categories": {r["category"]: r["count"] for r in note_categories}
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch system stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取系统统计数据失败")
+
+
+@router.get("/users")
+async def list_users_admin(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """分页查询并搜索平台所有效用户。"""
+    try:
+        query_sql = "SELECT id, phone, nickname, avatar_url, role, is_guest, created_at FROM users"
+        count_sql = "SELECT COUNT(*) as c FROM users"
+        params = []
+        
+        if search:
+            search_param = f"%{search.strip()}%"
+            where_clause = " WHERE phone LIKE %s OR nickname LIKE %s"
+            query_sql += where_clause
+            count_sql += where_clause
+            params.extend([search_param, search_param])
+            
+        query_sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        params_with_paging = list(params) + [limit, offset]
+
+        rows = mysql_helper.execute_query(query_sql, tuple(params_with_paging))
+        total_row = mysql_helper.execute_query_one(count_sql, tuple(params))
+        total = total_row["c"] if total_row else 0
+
+        items = []
+        for r in rows:
+            created_at_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(r["created_at"], datetime) else str(r["created_at"])
+            items.append({
+                "id": r["id"],
+                "phone": r["phone"],
+                "nickname": r["nickname"],
+                "avatar_url": r["avatar_url"],
+                "role": r["role"],
+                "is_guest": bool(r["is_guest"]),
+                "created_at": created_at_str
+            })
+
+        return {"success": True, "total": total, "items": items}
+    except Exception as e:
+        logger.error(f"Failed to query users: {str(e)}")
+        raise HTTPException(status_code=500, detail="查询用户列表失败")
+
+
+@router.get("/diagnoses")
+async def list_diagnoses_admin(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """分页查询并搜索平台所有图文诊断报告。"""
+    try:
+        query_sql = (
+            "SELECT h.id, h.user_id, h.title, h.category, h.overall_score, h.grade, h.report_json, h.created_at, u.nickname "
+            "FROM diagnosis_history h LEFT JOIN users u ON h.user_id = u.id"
+        )
+        count_sql = "SELECT COUNT(*) as c FROM diagnosis_history"
+        params = []
+        
+        if search:
+            search_param = f"%{search.strip()}%"
+            query_sql += " WHERE h.title LIKE %s OR h.category LIKE %s"
+            count_sql += " WHERE title LIKE %s OR category LIKE %s"
+            params.extend([search_param, search_param])
+            
+        query_sql += " ORDER BY h.created_at DESC LIMIT %s OFFSET %s"
+        params_with_paging = list(params) + [limit, offset]
+
+        rows = mysql_helper.execute_query(query_sql, tuple(params_with_paging))
+        total_row = mysql_helper.execute_query_one(count_sql, tuple(params))
+        total = total_row["c"] if total_row else 0
+
+        items = []
+        for r in rows:
+            created_at_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(r["created_at"], datetime) else str(r["created_at"])
+            
+            parsed_report = None
+            if r["report_json"]:
+                try:
+                    parsed_report = json_loads_safe(r["report_json"])
+                except Exception:
+                    pass
+
+            items.append({
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "user_nickname": r["nickname"] or "未关联/已注销",
+                "title": r["title"],
+                "category": r["category"],
+                "overall_score": r["overall_score"] or 0,
+                "grade": r["grade"] or "",
+                "created_at": created_at_str,
+                "report_json": parsed_report
+            })
+
+        return {"success": True, "total": total, "items": items}
+    except Exception as e:
+        logger.error(f"Failed to query diagnoses: {str(e)}")
+        raise HTTPException(status_code=500, detail="查询图文诊断列表失败")
+
+
+@router.get("/video-analyses")
+async def list_video_analyses_admin(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """分页查询并搜索平台所有短视频拉片分析任务。"""
+    try:
+        query_sql = (
+            "SELECT v.task_id, v.user_id, v.video_url, v.video_title, v.author_name, "
+            "       v.viral_score, v.viral_level, v.created_at, v.completed_at, v.report_json, u.nickname "
+            "FROM video_analysis_history v LEFT JOIN users u ON v.user_id = u.id"
+        )
+        count_sql = "SELECT COUNT(*) as c FROM video_analysis_history"
+        params = []
+        
+        if search:
+            search_param = f"%{search.strip()}%"
+            query_sql += " WHERE v.video_title LIKE %s OR v.author_name LIKE %s"
+            count_sql += " WHERE video_title LIKE %s OR author_name LIKE %s"
+            params.extend([search_param, search_param])
+            
+        query_sql += " ORDER BY v.created_at DESC LIMIT %s OFFSET %s"
+        params_with_paging = list(params) + [limit, offset]
+
+        rows = mysql_helper.execute_query(query_sql, tuple(params_with_paging))
+        total_row = mysql_helper.execute_query_one(count_sql, tuple(params))
+        total = total_row["c"] if total_row else 0
+
+        items = []
+        for r in rows:
+            created_at_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(r["created_at"], datetime) else str(r["created_at"])
+            completed_at_str = r["completed_at"].strftime("%Y-%m-%d %H:%M:%S") if r["completed_at"] and isinstance(r["completed_at"], datetime) else (str(r["completed_at"]) if r["completed_at"] else None)
+            
+            parsed_report = None
+            if r["report_json"]:
+                try:
+                    parsed_report = json_loads_safe(r["report_json"])
+                except Exception:
+                    pass
+
+            items.append({
+                "task_id": r["task_id"],
+                "user_id": r["user_id"],
+                "user_nickname": r["nickname"] or "游客/未关联",
+                "video_url": r["video_url"],
+                "video_title": r["video_title"] or "未拉取到标题",
+                "author_name": r["author_name"] or "未拉取到作者",
+                "viral_score": r["viral_score"],
+                "viral_level": r["viral_level"],
+                "created_at": created_at_str,
+                "completed_at": completed_at_str,
+                "report_json": parsed_report
+            })
+
+        return {"success": True, "total": total, "items": items}
+    except Exception as e:
+        logger.error(f"Failed to query video analyses: {str(e)}")
+        raise HTTPException(status_code=500, detail="查询视频拉片列表失败")
+
+
+@router.get("/feedbacks")
+async def list_feedbacks_admin(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """分页查询平台所有用户提交的客服留言与诊断反馈。"""
+    try:
+        rows = mysql_helper.execute_query(
+            "SELECT f.id, f.user_id, f.result_id, f.result_type, f.report_title, f.report_json, "
+            "       f.message_content, f.contact_info, f.created_at, u.nickname "
+            "FROM customer_feedback f LEFT JOIN users u ON f.user_id = u.id "
+            "ORDER BY f.created_at DESC "
+            "LIMIT %s OFFSET %s",
+            (limit, offset)
+        )
+        total_row = mysql_helper.execute_query_one("SELECT COUNT(*) as c FROM customer_feedback")
+        total = total_row["c"] if total_row else 0
+
+        items = []
+        for r in rows:
+            created_at_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if isinstance(r["created_at"], datetime) else str(r["created_at"])
+            
+            parsed_report = None
+            if r["report_json"]:
+                try:
+                    parsed_report = json_loads_safe(r["report_json"])
+                except Exception:
+                    pass
+
+            items.append({
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "user_nickname": r["nickname"] or "游客反馈",
+                "result_id": r["result_id"],
+                "result_type": r["result_type"],
+                "report_title": r["report_title"],
+                "report_json": parsed_report,
+                "message_content": r["message_content"],
+                "contact_info": r["contact_info"],
+                "created_at": created_at_str
+            })
+
+        return {"success": True, "total": total, "items": items}
+    except Exception as e:
+        logger.error(f"Failed to query feedbacks: {str(e)}")
+        raise HTTPException(status_code=500, detail="查询留言列表失败")
+
+
+def json_loads_safe(data_str: str) -> any:
+    """安全反序列化 JSON。"""
+    import json
+    return json.loads(data_str)
