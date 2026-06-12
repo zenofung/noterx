@@ -23,15 +23,19 @@ WORKDIR /workspace
 # Copy requirements first to leverage Docker build cache
 COPY backend/requirements.txt ./backend/
 
+# === [优化 3] 跳过 Playwright 自带浏览器下载（镜像源不全，经常 404），改用系统 chromium ===
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 # === [优化 2] 为 pip 指定阿里云镜像源，极速下载 Python 依赖包 ===
 RUN pip install --no-cache-dir -r backend/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
-# === [优化 3] 设置国内下载节点，解决 Playwright 下载 Chromium 浏览器内核超时的问题 ===
-ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright/
-
-# Install Playwright browser and system libs inside the container
-RUN playwright install chromium
-RUN playwright install-deps chromium
+# Install Chromium from system apt (阿里云镜像，速度快且稳定，不依赖 Playwright CDN)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    && rm -rf /var/lib/apt/lists/* \
+    && (which chromium && echo "chromium found at: $(which chromium)") \
+       || (which chromium-browser && echo "chromium-browser found at: $(which chromium-browser)") \
+       || (echo "ERROR: chromium not found!" && exit 1)
 
 # Copy the rest of backend, scripts, and docs
 COPY backend/ ./backend/

@@ -143,7 +143,16 @@ def _fetch_detail_sync(url: str, aweme_id: str) -> dict | None:
     filter_reason = None
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # 自动检测系统 chromium（Docker 容器）；本地开发 Playwright 自己管理浏览器
+        _sys_chromium = None
+        for _candidate in ("/usr/bin/chromium", "/usr/bin/chromium-browser"):
+            if os.path.exists(_candidate):
+                _sys_chromium = _candidate
+                break
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path=_sys_chromium,
+        )
         context = browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
