@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  db:
+    image: mysql:8.0
+    container_name: noterx-db
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      # Read credentials directly from the local .env variables
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+      interval: 5s
+
   backend:
     build:
       context: .
@@ -9,6 +29,9 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       # Mount data folder for persistence (SQLite database, markdown memory, video caches)
       - ./backend/data:/workspace/backend/data
@@ -19,7 +42,12 @@ services:
       - ./.env
     environment:
       - PYTHONUNBUFFERED=1
+      # Override MYSQL_HOST to 'db' service hostname inside the Docker network
+      - MYSQL_HOST=db
       # Explicitly override to ensure cookie file path is correct inside container
       - DOUYIN_COOKIE_FILE=cookies.txt
       # Use Hugging Face mirror to prevent network unreachable errors when downloading whisper models
       - HF_ENDPOINT=https://hf-mirror.com
+
+volumes:
+  mysql-data:
