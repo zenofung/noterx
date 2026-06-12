@@ -10,3 +10,6 @@ Pillow>=11.1.0
 jieba>=0.42.1
 aiofiles>=24.1.0
 httpx>=0.28.0
+PyMySQL>=1.1.0
+PyJWT>=2.10.0
+DBUtils>=3.1.0

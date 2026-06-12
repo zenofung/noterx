@@ -2,14 +2,17 @@ import asyncio
 import json
 import os
 import uuid
+from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Header
 from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
 from app.config_video import settings
 from app.models.schemas_video import AnalyzeRequest, AnalyzeResponse
 from app.services.video.pipeline import run_pipeline
+from app.api.auth_api import decode_access_token
+from app.utils import mysql_helper
 
 router = APIRouter()
 
@@ -18,8 +21,20 @@ tasks: dict[str, dict] = {}
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def start_analysis(req: AnalyzeRequest, background_tasks: BackgroundTasks):
+async def start_analysis(
+    req: AnalyzeRequest,
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None)
+):
     task_id = str(uuid.uuid4())[:8]
+    
+    # 1. Parse user_id if token is valid
+    user_id = None
+    if authorization:
+        payload = decode_access_token(authorization)
+        if payload and "sub" in payload:
+            user_id = payload["sub"]
+            
     event_queue = asyncio.Queue()
     tasks[task_id] = {
         "status": "queued",
@@ -33,6 +48,17 @@ async def start_analysis(req: AnalyzeRequest, background_tasks: BackgroundTasks)
         detail_path = os.path.join(task_dir, "detail.json")
         with open(detail_path, "w", encoding="utf-8") as f:
             json.dump(req.detail, f, ensure_ascii=False)
+
+    # 2. Insert initial task record into MySQL database
+    try:
+        mysql_helper.execute_update(
+            "INSERT INTO video_analysis_history (task_id, user_id, video_url, created_at) "
+            "VALUES (%s, %s, %s, CURRENT_TIMESTAMP)",
+            (task_id, user_id, req.url)
+        )
+    except Exception as e:
+        # Fail-safe: prevent database issues from breaking the core API
+        print(f"[MySQL History ERROR] Failed to insert task start record: {str(e)}")
 
     background_tasks.add_task(run_pipeline, task_id, req.url, event_queue)
     return AnalyzeResponse(task_id=task_id, status="queued")
@@ -62,11 +88,24 @@ async def stream_progress(task_id: str):
 
 @router.get("/results/{task_id}")
 async def get_results(task_id: str):
+    # 1. Try local cache file
     result_path = os.path.join(settings.DATA_DIR, task_id, "result.json")
-    if not os.path.exists(result_path):
-        raise HTTPException(404, "Results not found")
-    with open(result_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    if os.path.exists(result_path):
+        with open(result_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+            
+    # 2. Fallback: check MySQL database
+    try:
+        record = mysql_helper.execute_query_one(
+            "SELECT report_json FROM video_analysis_history WHERE task_id = %s",
+            (task_id,)
+        )
+        if record and record.get("report_json"):
+            return json.loads(record["report_json"])
+    except Exception as e:
+        print(f"[MySQL History ERROR] Failed to fetch report: {str(e)}")
+        
+    raise HTTPException(404, "Results not found")
 
 
 @router.get("/video/{task_id}")

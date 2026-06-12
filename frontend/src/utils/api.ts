@@ -17,6 +17,20 @@ const api = axios.create({
   timeout: 120_000,
 });
 
+// Request interceptor to attach JWT token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("noterx_token");
+    if (token) {
+      config.headers.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export function trackVisit(path: string = window.location.pathname): void {
   const payload = JSON.stringify({
     path,
@@ -348,7 +362,40 @@ export async function deleteHistory(id: string): Promise<void> {
   await api.delete(`/history/${id}`);
 }
 
+/**
+ * 获取短视频拉片分析历史列表
+ */
+export async function getVideoHistoryList(
+  limit = 20,
+  offset = 0
+): Promise<HistoryListItem[]> {
+  const { data } = await api.get<HistoryListItem[]>("/history/video", {
+    params: { limit, offset },
+  });
+  return data;
+}
+
+export async function deleteVideoHistory(taskId: string): Promise<void> {
+  await api.delete(`/history/video/${taskId}`);
+}
+
+/**
+ * 提交客服留言与诊断反馈
+ */
+export async function submitFeedback(params: {
+  result_id?: string;
+  result_type: "note" | "video";
+  report_title?: string;
+  report_json?: any;
+  message_content: string;
+  contact_info: string;
+}): Promise<{ success: boolean; message: string }> {
+  const { data } = await api.post<{ success: boolean; message: string }>("/feedback/submit", params);
+  return data;
+}
+
 // --------------- 截图分析 ---------------
+
 
 export type SlotType = "cover" | "content" | "profile" | "comments";
 
@@ -601,6 +648,62 @@ export function getVideoStreamUrl(taskId: string): string {
 export function getFrameImageUrl(taskId: string, framePath: string): string {
   const filename = framePath.replace(/\\/g, "/").split("/").pop();
   return `/api/video/frame/${taskId}/${filename}`;
+}
+
+export interface User {
+  id: string;
+  phone?: string;
+  wechat_openid?: string;
+  nickname: string;
+  avatar_url: string;
+  role: string;
+  is_guest: boolean;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  token: string;
+  user: User;
+  is_new?: boolean;
+  status?: string;
+  qr_url?: string;
+  ticket?: string;
+}
+
+/** 发送验证码 */
+export async function sendSmsCode(phone: string): Promise<boolean> {
+  const { data } = await api.post<{ success: boolean }>("/auth/sms/send", { phone });
+  return data.success;
+}
+
+/** 手机验证码登录 */
+export async function loginWithSms(phone: string, code: string): Promise<AuthResponse> {
+  const { data } = await api.post<AuthResponse>("/auth/sms/login", { phone, code });
+  return data;
+}
+
+/** 获取微信扫码 Ticket */
+export async function getWechatQrCode(): Promise<{ success: boolean; qr_url: string; ticket: string }> {
+  const { data } = await api.post<{ success: boolean; qr_url: string; ticket: string }>("/auth/wechat/qr-code");
+  return data;
+}
+
+/** 轮询微信扫码结果 */
+export async function pollWechatLogin(ticket: string): Promise<AuthResponse> {
+  const { data } = await api.post<AuthResponse>("/auth/wechat/login-poll", { ticket });
+  return data;
+}
+
+/** 游客一键登录 */
+export async function loginAsGuest(): Promise<AuthResponse> {
+  const { data } = await api.post<AuthResponse>("/auth/guest/login");
+  return data;
+}
+
+/** 获取当前登录用户信息 */
+export async function getCurrentUser(): Promise<User> {
+  const { data } = await api.get<{ success: boolean; user: User }>("/auth/me");
+  return data.user;
 }
 
 export default api;

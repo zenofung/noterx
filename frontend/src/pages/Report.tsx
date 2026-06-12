@@ -28,6 +28,7 @@ import SimulatedComments from "../components/SimulatedComments";
 import SuggestionList from "../components/SuggestionList";
 import DiagnoseCard from "../components/DiagnoseCard";
 import { showToast } from "../components/Toast";
+import ContactFeedback from "../components/ContactFeedback";
 
 const card = {
   bgcolor: "#fff",
@@ -43,6 +44,7 @@ export default function Report() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as {
+    id?: string;
     report: DiagnoseResult;
     params: { title: string; category: string; content?: string; tags?: string };
     isFallback?: boolean;
@@ -421,7 +423,12 @@ export default function Report() {
           <Box sx={card}>
             <DiagnoseCard report={report} title={params.title} />
           </Box>
-
+          <ContactFeedback
+            resultId={state?.id}
+            resultType="note"
+            reportTitle={params.title}
+            reportJson={report}
+          />
         </motion.div>
 
         <motion.div {...sectionAnim(6)}>

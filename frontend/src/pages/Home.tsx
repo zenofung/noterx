@@ -5,15 +5,16 @@ import axios from "axios";
 import {
   Box, Typography, TextField, Button, Chip,
   CircularProgress, useTheme,
-  useMediaQuery, Alert,
+  useMediaQuery, Alert, Menu, MenuItem, Avatar, Divider
 } from "@mui/material";
 import HistoryOutlined from "@mui/icons-material/HistoryOutlined";
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CategoryPicker from "../components/CategoryPicker";
 import UploadZone from "../components/UploadZone";
-import { quickRecognize, quickRecognizeVideo, getApiHealth, startVideoAnalysis } from "../utils/api";
-import type { QuickRecognizeResult } from "../utils/api";
+import { quickRecognize, quickRecognizeVideo, getApiHealth, startVideoAnalysis, getCurrentUser } from "../utils/api";
+import type { QuickRecognizeResult, User } from "../utils/api";
+import LoginDialog from "../components/LoginDialog";
 
 
 /** @returns A stable key for a File object */
@@ -125,6 +126,35 @@ export default function Home() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
+
+  // --- Authentication States ---
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  // Verify token on mount
+  useEffect(() => {
+    const token = localStorage.getItem("noterx_token");
+    if (token) {
+      getCurrentUser()
+        .then((user) => setCurrentUser(user))
+        .catch((err) => {
+          console.error("Token verification failed:", err);
+          localStorage.removeItem("noterx_token");
+        });
+    }
+  }, []);
+
+  const handleLoginSuccess = (user: User, token: string) => {
+    localStorage.setItem("noterx_token", token);
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("noterx_token");
+    setCurrentUser(null);
+    setAnchorEl(null);
+  };
 
   const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState("");
@@ -671,7 +701,7 @@ export default function Home() {
             基于大量数据训练用户画像和流量预测模型
           </Typography>
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, md: 1 } }}>
           <Button
             onClick={() => { setLeaving(true); setTimeout(() => { window.location.href = "/"; }, 350); }}
             size="small"
@@ -701,6 +731,91 @@ export default function Home() {
           >
             <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>联系</Box>
           </Button>
+
+          {/* User Auth Dropdown/Button */}
+          {currentUser ? (
+            <>
+              <Box
+                onClick={(e) => setAnchorEl(e.currentTarget)}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  cursor: "pointer",
+                  ml: 1,
+                  px: 1,
+                  py: 0.5,
+                  borderRadius: "20px",
+                  "&:hover": { bgcolor: "#f5f5f5" },
+                }}
+              >
+                <Avatar
+                  src={currentUser.avatar_url}
+                  sx={{ width: 26, height: 26, border: "1px solid #eee" }}
+                />
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#333",
+                    display: { xs: "none", sm: "block" },
+                    maxWidth: 80,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {currentUser.nickname}
+                </Typography>
+              </Box>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={() => setAnchorEl(null)}
+                slotProps={{
+                  paper: {
+                    sx: {
+                      borderRadius: "14px",
+                      mt: 1.5,
+                      minWidth: 120,
+                      boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+                    }
+                  }
+                }}
+              >
+                <MenuItem onClick={() => setAnchorEl(null)} sx={{ fontSize: 12, fontWeight: 700 }}>
+                  个人资料
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={handleLogout} sx={{ fontSize: 12, color: "#888", fontWeight: 700 }}>
+                  退出登录
+                </MenuItem>
+              </Menu>
+            </>
+          ) : (
+            <Button
+              onClick={() => setLoginDialogOpen(true)}
+              variant="contained"
+              size="small"
+              sx={{
+                ml: 1,
+                borderRadius: "20px",
+                fontSize: 11,
+                fontWeight: 700,
+                px: 2,
+                py: 0.5,
+                textTransform: "none",
+                background: "linear-gradient(135deg, #ff5c6f, #e61e3d)",
+                boxShadow: "0 3px 8px rgba(255,36,66,0.15)",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #e61e3d, #cc1a35)",
+                  boxShadow: "0 4px 12px rgba(255,36,66,0.25)",
+                }
+              }}
+            >
+              登录 / 注册
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -1124,6 +1239,11 @@ export default function Home() {
         </Typography> */}
       </Box>
 
+      <LoginDialog
+        open={loginDialogOpen}
+        onClose={() => setLoginDialogOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+      />
     </Box>
   );
 }

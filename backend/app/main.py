@@ -86,8 +86,14 @@ def _ensure_history_table():
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """应用生命周期：启动时自动建表"""
+    """应用生命周期：启动时自动建表与连接池初始化"""
     _ensure_history_table()
+    try:
+        from app.utils.mysql_helper import init_db_pool
+        init_db_pool()
+    except Exception as e:
+        import logging
+        logging.getLogger("noterx.main").error(f"lifespan db pool init error: {str(e)}")
     yield
 
 logging.basicConfig(

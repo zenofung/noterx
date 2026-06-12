@@ -1,8 +1,14 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # === [优化 1] 将 Debian 系统软件源替换为阿里云镜像，解决 apt-get 卡顿超时问题 ===
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+        sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources; \
+    fi && \
+    if [ -f /etc/apt/sources.list ]; then \
+        sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+        sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list; \
+    fi
 
 # Install system dependencies (ffmpeg, libgl1 for OpenCV)
 RUN apt-get update && apt-get install -y --no-install-recommends \

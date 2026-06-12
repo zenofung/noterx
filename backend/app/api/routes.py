@@ -11,6 +11,8 @@ from app.api.screenshot_api import router as screenshot_router
 from app.api.optimize_api import router as optimize_router
 from app.api.visit_api import router as visit_router
 from app.api.video_api import router as video_router
+from app.api.auth_api import router as auth_router
+from app.api.feedback_api import router as feedback_router
 
 router = APIRouter()
 
@@ -21,13 +23,15 @@ async def api_health():
     return {"ok": True, "service": "noterx-api"}
 
 
+router.include_router(auth_router, tags=["auth"])
 router.include_router(diagnose_router, tags=["diagnose"])
 router.include_router(baseline_router, tags=["baseline"])
 router.include_router(comments_router, tags=["comments"])
-# history_router disabled — #58 fix: history is local-only (IndexedDB), server endpoints were a data leak
-# router.include_router(history_router, tags=["history"])
+router.include_router(history_router, prefix="/history", tags=["history"])
 router.include_router(screenshot_router, tags=["screenshot"])
 router.include_router(optimize_router, tags=["optimize"])
 router.include_router(visit_router, tags=["visit"])
 router.include_router(video_router, prefix="/video", tags=["video"])
+router.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
+
 

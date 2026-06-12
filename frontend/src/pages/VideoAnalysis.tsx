@@ -42,6 +42,7 @@ import type {
   FullAnalysisResult,
   ProgressStage,
 } from "../utils/api";
+import ContactFeedback from "../components/ContactFeedback";
 
 const STAGE_CONFIG: Record<string, { label: string; tip: string }> = {
   downloading:       { label: "读取视频链接", tip: "正在访问抖音获取视频信息..." },
@@ -964,6 +965,12 @@ export default function VideoAnalysis() {
               );
             })}
           </Box>
+          <ContactFeedback
+            resultId={result.task_id}
+            resultType="video"
+            reportTitle={result.video_meta.title}
+            reportJson={result}
+          />
         </Box>
       </Box>
     </Box>

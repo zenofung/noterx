@@ -22,6 +22,16 @@ async def run_pipeline(task_id: str, url: str, event_queue: asyncio.Queue):
     task_dir = os.path.join(settings.DATA_DIR, task_id)
     os.makedirs(task_dir, exist_ok=True)
 
+    # Record started_at timestamp in database
+    from app.utils import mysql_helper
+    try:
+        mysql_helper.execute_update(
+            "UPDATE video_analysis_history SET started_at = %s WHERE task_id = %s",
+            (datetime.now(), task_id)
+        )
+    except Exception as db_err:
+        print(f"[MySQL History ERROR] Failed to update started_at: {str(db_err)}")
+
     try:
         # Stage 1: Download
         await event_queue.put({
@@ -166,12 +176,72 @@ async def run_pipeline(task_id: str, url: str, event_queue: asyncio.Queue):
         with open(result_path, "w", encoding="utf-8") as f:
             f.write(result.model_dump_json(indent=2, by_alias=True))
 
+        # Update complete task details to MySQL database
+        try:
+            # Query creation / start time to compute processing duration
+            task_record = mysql_helper.execute_query_one(
+                "SELECT created_at, started_at FROM video_analysis_history WHERE task_id = %s",
+                (task_id,)
+            )
+            
+            completed_at = datetime.now()
+            elapsed_seconds = None
+            if task_record:
+                start_t = task_record.get("started_at") or task_record.get("created_at")
+                if start_t:
+                    if isinstance(start_t, datetime):
+                        elapsed_seconds = (completed_at - start_t).total_seconds()
+            
+            pub_time = None
+            if meta.publish_time:
+                try:
+                    pub_time = datetime.fromtimestamp(meta.publish_time)
+                except Exception:
+                    pass
+
+            report_json = result.model_dump_json(by_alias=True)
+
+            mysql_helper.execute_update(
+                "UPDATE video_analysis_history SET "
+                "  video_title = %s, author_name = %s, author_id = %s, duration = %s, "
+                "  likes = %s, comments = %s, shares = %s, publish_time = %s, "
+                "  viral_score = %s, viral_level = %s, "
+                "  hook_score = %s, pacing_score = %s, emotion_score = %s, "
+                "  comment_bait_score = %s, share_bait_score = %s, cover_title_score = %s, "
+                "  completed_at = %s, elapsed_seconds = %s, report_json = %s "
+                "WHERE task_id = %s",
+                (
+                    meta.title or "", meta.author or "", meta.author_id or "", meta.duration or 0.0,
+                    meta.likes, meta.comments, meta.shares, pub_time,
+                    viral.viral_score, viral.viral_level or "",
+                    viral.dim_hook.score if viral.dim_hook else None,
+                    viral.dim_pacing.score if viral.dim_pacing else None,
+                    viral.dim_emotion.score if viral.dim_emotion else None,
+                    viral.dim_comment_bait.score if viral.dim_comment_bait else None,
+                    viral.dim_share_bait.score if viral.dim_share_bait else None,
+                    viral.dim_cover_title.score if viral.dim_cover_title else None,
+                    completed_at, elapsed_seconds, report_json,
+                    task_id
+                )
+            )
+        except Exception as db_err:
+            print(f"[MySQL History ERROR] Failed to save final report data: {str(db_err)}")
+
         await event_queue.put({
             "type": "done",
             "data": {"task_id": task_id},
         })
 
     except Exception as e:
+        # Update completion status to error in DB if possible
+        try:
+            mysql_helper.execute_update(
+                "UPDATE video_analysis_history SET completed_at = %s, report_json = %s WHERE task_id = %s",
+                (datetime.now(), json.dumps({"error": _format_pipeline_error(e)}, ensure_ascii=False), task_id)
+            )
+        except Exception:
+            pass
+
         await event_queue.put({
             "type": "error",
             "data": {"error": _format_pipeline_error(e)},
