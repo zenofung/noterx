@@ -141,7 +141,10 @@ export default function Home() {
         .catch((err) => {
           console.error("Token verification failed:", err);
           localStorage.removeItem("noterx_token");
+          setLoginDialogOpen(true);
         });
+    } else {
+      setLoginDialogOpen(true);
     }
   }, []);
 
@@ -170,12 +173,16 @@ export default function Home() {
   /** null=探测中；false=连不上本机 API（多为未启动或 Vite 代理端口不对） */
   const [apiReachable, setApiReachable] = useState<boolean | null>(null);
 
-  const [mode, setMode] = useState<"video" | "image">("video");
+  const mode = "video";
   const [videoUrl, setVideoUrl] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState("");
 
   const handleVideoSubmit = async () => {
+    if (!currentUser) {
+      setLoginDialogOpen(true);
+      return;
+    }
     if (!videoUrl.trim()) {
       setVideoError("请输入视频链接");
       return;
@@ -616,6 +623,10 @@ export default function Home() {
   useEffect(() => { if (submitError) setSubmitError(""); }, [files.length, title]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = () => {
+    if (!currentUser) {
+      setLoginDialogOpen(true);
+      return;
+    }
     if (files.length === 0) { setSubmitError("请先上传笔记截图"); return; }
     if (!title.trim()) { setSubmitError("请输入笔记标题"); return; }
     if (lockInputs || isFormBlocked) { setSubmitError("AI 识别中，请稍等"); return; }
@@ -820,50 +831,7 @@ export default function Home() {
       </Box>
 
       {/* ═══ Mode Switcher ═══ */}
-      <Box sx={{ display: "flex", justifyContent: "center", gap: 2, mt: 3, mb: 1, flexShrink: 0 }}>
-        <Button
-          onClick={() => setMode("video")}
-          variant={mode === "video" ? "contained" : "outlined"}
-          sx={{
-            borderRadius: "20px",
-            px: 3,
-            py: 0.8,
-            fontWeight: 700,
-            fontSize: "0.85rem",
-            textTransform: "none",
-            borderColor: "#ff2442",
-            color: mode === "video" ? "#fff" : "#ff2442",
-            background: mode === "video" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "transparent",
-            "&:hover": {
-              background: mode === "video" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "rgba(255,36,66,0.04)",
-              borderColor: "#ff2442",
-            }
-          }}
-        >
-          🎬 短视频分析 (链接)
-        </Button>
-        <Button
-          onClick={() => setMode("image")}
-          variant={mode === "image" ? "contained" : "outlined"}
-          sx={{
-            borderRadius: "20px",
-            px: 3,
-            py: 0.8,
-            fontWeight: 700,
-            fontSize: "0.85rem",
-            textTransform: "none",
-            borderColor: "#ff2442",
-            color: mode === "image" ? "#fff" : "#ff2442",
-            background: mode === "image" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "transparent",
-            "&:hover": {
-              background: mode === "image" ? "linear-gradient(135deg, #ff5c6f, #e61e3d)" : "rgba(255,36,66,0.04)",
-              borderColor: "#ff2442",
-            }
-          }}
-        >
-          📷 图文笔记诊断 (截图)
-        </Button>
-      </Box>
+      {/* Hidden mode switcher as requested to only show video analysis */}
 
       {mode === "video" ? (
         <Box sx={{

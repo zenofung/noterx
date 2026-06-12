@@ -350,7 +350,7 @@ export default function History() {
                 const displayScore = currentTab === 1
                   ? item.overall_score  // 视频评分已是整数
                   : Math.round(item.overall_score);
-                
+
                 return (
                   <Box
                     key={item.id}
